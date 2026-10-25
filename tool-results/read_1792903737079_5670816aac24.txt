@@ -1,0 +1,1830 @@
+     1→<!doctype html>
+     2→<html lang="en">
+     3→<head>
+     4→  <meta charset="utf-8" />
+     5→  <meta name="viewport" content="width=device-width, initial-scale=1" />
+     6→  <meta name="description" content="Writeon — a client-side, two-in-one cybersecurity companion: paste a link to surface phishing warning signs, and check password strength against NIST SP 800-63B guidance. Heuristic analysis runs entirely in your browser. No backend, no tracking." />
+     7→  <title>Writeon — Check links. Build strong passwords.</title>
+     8→  <meta name="theme-color" content="#050505" />
+     9→  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    10→
+    11→  <!-- Fonts -->
+    12→  <link rel="preconnect" href="https://fonts.googleapis.com" />
+    13→  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    14→  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+    15→
+    16→  <!-- Bootstrap 6 (official, via CDN — see Research & References §6). Tool logic itself is dependency-free vanilla JS. -->
+    17→  <link href="https://cdn.jsdelivr.net/npm/bootstrap@6.0.0-alpha.1/dist/css/bootstrap.min.css" rel="stylesheet" />
+    18→  <script type="module" src="https://cdn.jsdelivr.net/npm/bootstrap@6.0.0-alpha.1/dist/js/bootstrap.bundle.min.js"></script>
+    19→
+    20→  <style>
+    21→  /* ============================================================
+    22→     WRITEON — standalone build · black & white · dark glass · grid
+    23→     ============================================================ */
+    24→  :root {
+    25→    --bg: #050505;
+    26→    --bg-deep: #030303;
+    27→    --panel: rgba(16, 16, 16, 0.62);
+    28→    --panel-2: rgba(22, 22, 22, 0.55);
+    29→    --panel-3: rgba(28, 28, 28, 0.5);
+    30→    --solid: #101010;
+    31→    --line: rgba(255, 255, 255, 0.13);
+    32→    --line-strong: rgba(255, 255, 255, 0.32);
+    33→    --text: #f2f2f2;
+    34→    --muted: #b4b4b4;
+    35→    --faint: #7d7d7d;
+    36→    --white: #ffffff;
+    37→    --ok: #f5f5f5;
+    38→    --warn: #c9c9c9;
+    39→    --bad: #0c0c0c;
+    40→    --glow: 0 0 26px rgba(255, 255, 255, 0.22);
+    41→    --panel-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    42→    --radius: 18px;
+    43→    --font-display: 'Chakra Petch', 'Segoe UI', sans-serif;
+    44→    --font-body: 'Inter', 'Segoe UI', sans-serif;
+    45→    --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    46→  }
+    47→
+    48→  html { scroll-behavior: smooth; overflow-x: clip; }
+    49→  /* While the intro overlay is up the page underneath must not scroll */
+    50→  html.intro-open { overflow: hidden; }
+    51→  body {
+    52→    background-color: var(--bg);
+    53→    color: var(--text);
+    54→    font-family: var(--font-body);
+    55→    line-height: 1.6;
+    56→    overflow-x: clip;
+    57→    /* full-page technical grid (two scales) — parallax layer 0 */
+    58→    background-image:
+    59→      radial-gradient(1100px 620px at 78% -12%, rgba(255, 255, 255, 0.055), transparent 60%),
+    60→      radial-gradient(900px 620px at -15% 32%, rgba(255, 255, 255, 0.045), transparent 55%),
+    61→      radial-gradient(820px 700px at 110% 78%, rgba(255, 255, 255, 0.05), transparent 60%),
+    62→      linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    63→      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    64→      linear-gradient(rgba(255, 255, 255, 0.085) 1px, transparent 1px),
+    65→      linear-gradient(90deg, rgba(255, 255, 255, 0.085) 1px, transparent 1px);
+    66→    background-size: auto, auto, auto, 34px 34px, 34px 34px, 170px 170px, 170px 170px;
+    67→  }
+    68→  ::selection { background: #f5f5f5; color: #050505; }
+    69→  :focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; border-radius: 4px; }
+    70→  code { font-family: var(--font-mono); font-size: 0.86em; color: #ffffff; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); padding: 0.1em 0.42em; border-radius: 6px; }
+    71→
+    72→  /* ambient light orbs — grayscale, parallax driven */
+    73→  .orb { position: fixed; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: 0; will-change: transform; }
+    74→  .orb-a { width: 440px; height: 440px; top: 16%; right: -180px; background: radial-gradient(circle, rgba(255, 255, 255, 0.075), transparent 70%); }
+    75→  .orb-b { width: 500px; height: 500px; bottom: 6%; left: -220px; background: radial-gradient(circle, rgba(255, 255, 255, 0.06), transparent 70%); }
+    76→
+    77→  /* skip link */
+    78→  .skip-link { position: absolute; left: -9999px; top: 0; z-index: 1000; background: #ffffff; color: #050505; font-family: var(--font-mono); font-weight: 700; padding: 12px 22px; border-radius: 0 0 12px 0; text-decoration: none; }
+    79→  .skip-link:focus { left: 0; }
+    80→
+    81→  /* ---------- shared ---------- */
+    82→  .mono-kicker { font-family: var(--font-mono); font-size: 0.8rem; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.9rem; }
+    83→  .mono-line { font-family: var(--font-mono); font-size: 0.88rem; color: var(--text); }
+    84→  .mono-mini { font-family: var(--font-mono); font-size: 0.72rem; color: var(--faint); letter-spacing: 0.02em; }
+    85→  .prompt { color: #ffffff; font-weight: 700; margin-right: 0.35em; }
+    86→  .grad-text { background: linear-gradient(100deg, #ffffff 0%, #d9d9d9 35%, #8a8a8a 78%, #4f4f4f 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; }
+    87→  .caret { display: inline-block; margin-left: 2px; color: #ffffff; animation: caretBlink 1.1s steps(1) infinite; }
+    88→  @keyframes caretBlink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+    89→
+    90→  .section { padding: 56px 0 6px; position: relative; z-index: 1; }
+    91→  .section-title { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.7rem, 3.4vw, 2.45rem); letter-spacing: 0.01em; margin-bottom: 0.35rem; color: var(--text); }
+    92→  .section-sub { color: var(--muted); max-width: 62ch; margin-bottom: 1.1rem; }
+    93→
+    94→  /* dark glass panels */
+    95→  .cyber-panel {
+    96→    position: relative;
+    97→    background: linear-gradient(160deg, var(--panel-2), var(--panel) 55%, rgba(10, 10, 10, 0.72));
+    98→    border: 1px solid var(--line);
+    99→    border-radius: var(--radius);
+   100→    box-shadow: var(--panel-shadow);
+   101→    backdrop-filter: blur(18px);
+   102→    -webkit-backdrop-filter: blur(18px);
+   103→  }
+   104→  .cyber-panel::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; background: linear-gradient(135deg, rgba(255, 255, 255, 0.5), transparent 32%, transparent 68%, rgba(255, 255, 255, 0.38)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; opacity: 0.8; }
+   105→
+   106→  .panel-head { display: flex; align-items: center; gap: 0.65rem; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.22em; color: var(--faint); margin-bottom: 1rem; }
+   107→  .panel-tag { color: #050505; background: #ffffff; border-radius: 6px; padding: 1px 7px; font-weight: 700; letter-spacing: 0.08em; }
+   108→
+   109→  /* ---------- navbar ---------- */
+   110→  .topnav { position: sticky; top: 0; z-index: 1030; border-bottom: 1px solid var(--line); background: rgba(5, 5, 5, 0.72); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+   111→  .topnav .container { display: flex; align-items: center; justify-content: space-between; padding-top: 0.55rem; padding-bottom: 0.55rem; gap: 1rem; height: 56px; }
+   112→  .brand-mark { display: inline-flex; align-items: center; gap: 0.6rem; text-decoration: none; }
+   113→  .brand-shield { filter: drop-shadow(0 0 9px rgba(255, 255, 255, 0.4)); }
+   114→  .brand-text { font-family: var(--font-display); font-weight: 700; font-size: 1.06rem; letter-spacing: 0.16em; color: var(--text); }
+   115→  .brand-text em { font-style: normal; color: #ffffff; }
+   116→  .nav-links .nav-link { color: var(--muted); font-size: 0.86rem; font-weight: 600; padding: 0.35rem 0.65rem; border-radius: 8px; transition: color .2s, background .2s; }
+   117→  .nav-links .nav-link:hover, .nav-links .nav-link:focus-visible { color: #ffffff; background: rgba(255, 255, 255, 0.08); }
+   118→  .nav-chip { font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.14em; color: #ffffff; border: 1px solid var(--line-strong); border-radius: 999px; padding: 0.35rem 0.8rem; margin-left: 0.6rem; white-space: nowrap; box-shadow: var(--glow); background: rgba(255,255,255,0.05); }
+   119→  .chip-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ffffff; margin-left: 0.45rem; vertical-align: 1px; animation: pulseDot 1.8s ease-in-out infinite; }
+   120→  @keyframes pulseDot { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.6); } 50% { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0); } }
+   121→  .nav-toggle-btn { border: 1px solid var(--line-strong); border-radius: 10px; padding: 6px 10px; background: rgba(255, 255, 255, 0.06); }
+   122→  .nav-toggle-btn:focus-visible { outline: 2px solid #ffffff; }
+   123→  .navbar-collapse { padding: 0.5rem 0; }
+   124→
+   125→  /* ---------- buttons ---------- */
+   126→  .btn-cyber { display: inline-flex; align-items: center; justify-content: center; gap: 0.55rem; font-family: var(--font-display); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; font-size: 0.82rem; color: #050505 !important; background: linear-gradient(120deg, #ffffff, #d4d4d4 55%, #a8a8a8); border: 0; border-radius: 12px; padding: 0.78rem 1.6rem; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6) inset, 0 10px 32px rgba(255, 255, 255, 0.14), var(--glow); transition: transform .18s, box-shadow .18s, filter .18s; text-decoration: none; }
+   127→  .btn-cyber:hover { transform: translateY(-2px); filter: brightness(1.03); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7) inset, 0 14px 42px rgba(255, 255, 255, 0.2), 0 0 40px rgba(255, 255, 255, 0.3); }
+   128→  .btn-cyber:active { transform: translateY(0); }
+   129→  .btn-ghost { display: inline-flex; align-items: center; gap: 0.5rem; font-family: var(--font-display); font-weight: 600; letter-spacing: 0.06em; font-size: 0.84rem; color: #ffffff !important; background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line-strong); border-radius: 12px; padding: 0.72rem 1.5rem; text-decoration: none; transition: background .2s, box-shadow .2s; }
+   130→  .btn-ghost:hover { background: rgba(255, 255, 255, 0.14); box-shadow: var(--glow); }
+   131→  .btn-ghost-icon { display: inline-flex; align-items: center; gap: 0.45rem; color: var(--muted); background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 12px; padding: 0.72rem 1.05rem; font-size: 0.82rem; font-weight: 600; transition: color .2s, border-color .2s; }
+   132→  .btn-ghost-icon:hover { color: #ffffff; border-color: rgba(255, 255, 255, 0.4); }
+   133→  .btn-sm { padding: 0.5rem 0.9rem; font-size: 0.76rem; border-radius: 10px; }
+   134→
+   135→  /* ---------- hero ---------- */
+   136→  .hero { position: relative; z-index: 1; padding: 46px 0 26px; }
+   137→  .hero-title { font-family: var(--font-display); font-weight: 700; font-size: clamp(3.2rem, 8.6vw, 5.2rem); line-height: 0.96; letter-spacing: 0.03em; margin: 0.4rem 0 0.7rem; text-shadow: 0 0 54px rgba(255, 255, 255, 0.25); }
+   138→  .hero-sub { font-size: clamp(1.15rem, 2.1vw, 1.45rem); font-weight: 600; color: var(--text); margin-bottom: 0.35rem; }
+   139→  .mono-line.reveal.d3 { color: var(--muted); margin-bottom: 1.1rem; }
+   140→  .hero-lede { color: var(--muted); max-width: 52ch; margin-bottom: 1.5rem; }
+   141→  .hero-lede code { font-size: 0.8em; }
+   142→  .hero-ctas { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 1.4rem; }
+   143→  .hero-badges { list-style: none; display: flex; flex-wrap: wrap; gap: 0.55rem 1.1rem; padding: 0; margin: 0; }
+   144→  .hero-badges li { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+   145→  .hero-badges svg { color: #ffffff; }
+   146→
+   147→  /* hero visual — SHIELD SCANNER (parallax layer) */
+   148→  .hero-visual { position: relative; display: flex; justify-content: center; align-items: center; min-height: 340px; will-change: transform; }
+   149→  .holo-frame { position: relative; width: min(430px, 88%); aspect-ratio: 1/1.02; display: flex; align-items: center; justify-content: center; border-radius: 26px; background: radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.075), rgba(10, 10, 10, 0.7) 72%); border: 1px solid var(--line-strong); overflow: hidden; box-shadow: var(--panel-shadow), inset 0 0 70px rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); }
+   150→  .holo-frame::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 5px, rgba(255, 255, 255, 0.035) 5px 6px); pointer-events: none; }
+   151→  .shield-svg { width: 66%; z-index: 1; filter: drop-shadow(0 0 28px rgba(255, 255, 255, 0.35)); }
+   152→  .orbit-ring { transform-origin: 110px 112px; animation: ringSpin 36s linear infinite; }
+   153→  @keyframes ringSpin { to { transform: rotate(360deg); } }
+   154→  .scan-beam { position: absolute; left: 6%; right: 6%; height: 84px; top: -90px; background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.28) 45%, rgba(255, 255, 255, 0.9) 50%, rgba(255, 255, 255, 0.28) 55%, transparent); filter: blur(1px); mix-blend-mode: screen; animation: beamSweep 4.6s ease-in-out infinite; z-index: 2; }
+   155→  @keyframes beamSweep { 0%, 100% { top: -18%; opacity: 0; } 12% { opacity: 1; } 48% { top: 96%; opacity: 1; } 60%, 100% { top: 108%; opacity: 0; } }
+   156→  .holo-corner { position: absolute; width: 30px; height: 30px; border-color: #ffffff; border-style: solid; opacity: 0.9; z-index: 3; }
+   157→  .holo-corner.tl { top: 12px; left: 12px; border-width: 2px 0 0 2px; border-radius: 6px 0 0 0; }
+   158→  .holo-corner.tr { top: 12px; right: 12px; border-width: 2px 2px 0 0; border-radius: 0 6px 0 0; }
+   159→  .holo-corner.bl { bottom: 12px; left: 12px; border-width: 0 0 2px 2px; border-radius: 0 0 0 6px; }
+   160→  .holo-corner.br { bottom: 12px; right: 12px; border-width: 0 2px 2px 0; border-radius: 0 0 6px 0; }
+   161→  .holo-caption { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.16em; color: var(--faint); z-index: 3; }
+   162→  .live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ffffff; box-shadow: 0 0 9px #ffffff; margin-right: 6px; animation: pulseDot 1.4s infinite; }
+   163→
+   164→  /* floating chips — parallax layer 2 */
+   165→  .float-chip { position: absolute; font-size: 0.74rem; line-height: 1.35; color: var(--text); background: rgba(14, 14, 14, 0.78); border: 1px solid var(--line-strong); border-radius: 14px; padding: 0.5rem 0.75rem; backdrop-filter: blur(10px); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55), var(--glow); z-index: 4; animation: floatY 5.4s ease-in-out infinite alternate; will-change: transform; }
+   166→  .float-chip .chip-num { font-family: var(--font-display); color: #ffffff; font-weight: 700; }
+   167→  .mono-mini { font-family: var(--font-mono); font-size: 0.68rem; color: #e8e8e8; }
+   168→  .chip-a { top: 7%; left: 0; animation-delay: .2s; }
+   169→  .chip-b { top: 21%; right: -2%; animation-delay: 1.4s; }
+   170→  .chip-c { bottom: 17%; left: 3%; animation-delay: 2.6s; }
+   171→  @keyframes floatY { from { transform: translateY(-6px); } to { transform: translateY(10px); } }
+   172→
+   173→  /* signal marquee */
+   174→  .signal-strip { margin-top: 30px; border: 1px solid var(--line); border-radius: 12px; background: rgba(5, 5, 5, 0.66); overflow: hidden; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent); mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent); }
+   175→  .signal-track { display: inline-flex; align-items: center; gap: 1.15rem; padding: 0.55rem 1rem; width: max-content; animation: marquee 30s linear infinite; font-family: var(--font-mono); font-size: 0.74rem; letter-spacing: 0.04em; color: var(--faint); }
+   176→  .signal-track i { color: #e8e8e8; font-style: normal; }
+   177→  @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+   178→
+   179→  /* ---------- team card ---------- */
+   180→  .team-card { margin-top: 1.6rem; display: flex; align-items: center; gap: 1.3rem; flex-wrap: wrap; padding: 1.1rem 1.6rem; background: linear-gradient(120deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.05) 60%, rgba(255, 255, 255, 0.08)); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--glow), var(--panel-shadow); position: relative; z-index: 1; backdrop-filter: blur(12px); }
+   181→  .team-avatars { display: flex; }
+   182→  .avatar { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-display); font-weight: 700; color: #050505; border: 2px solid #050505; margin-left: -10px; }
+   183→  .avatar:first-child { margin-left: 0; }
+   184→  .a-1 { background: linear-gradient(135deg, #ffffff, #b9b9b9); }
+   185→  .a-2 { background: linear-gradient(135deg, #d4d4d4, #7a7a7a); }
+   186→  .a-3 { background: linear-gradient(135deg, #ececec, #4f4f4f); }
+   187→  .a-4 { background: linear-gradient(135deg, #ffffff, #5d5d5d); }
+   188→  .team-meta { min-width: 200px; }
+   189→  .team-names { font-family: var(--font-display); font-weight: 700; font-size: 1.12rem; letter-spacing: 0.04em; margin: 0; }
+   190→  .team-names span { color: #ffffff; }
+   191→  .team-names.small { font-size: 0.98rem; margin-bottom: 0.3rem; }
+   192→  .team-role { color: var(--muted); font-size: 0.82rem; margin: 0.15rem 0 0; }
+   193→  .team-right { margin: 0 0 0 auto; color: var(--muted); }
+   194→  @media (max-width: 768px) { .team-right { margin-left: 0; width: 100%; } }
+   195→
+   196→  /* ---------- problem ---------- */
+   197→  .problem-panel { padding: 1.6rem 1.7rem; }
+   198→  .problem-lede { color: var(--muted); font-size: 0.95rem; margin-bottom: 1.1rem; }
+   199→  .problem-lede em { color: var(--text); font-style: normal; border-bottom: 2px solid rgba(255, 255, 255, 0.4); }
+   200→  .problem-list { list-style: none; margin: 0 0 1.1rem; padding: 0; display: grid; gap: 0.9rem; }
+   201→  .problem-list li { display: flex; gap: 0.75rem; font-size: 0.88rem; color: var(--muted); align-items: flex-start; }
+   202→  .problem-list strong { color: var(--text); }
+   203→  .p-icon { flex: 0 0 auto; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; border: 1px solid var(--line); color: #ffffff; background: rgba(255, 255, 255, 0.06); }
+   204→  .problem-foot { border-top: 1px dashed var(--line); padding-top: 0.8rem; }
+   205→  .problem-foot a { color: #ffffff; text-decoration: none; border-bottom: 1px solid rgba(255,255,255,.35); }
+   206→
+   207→  .anatomy-panel { padding: 1.6rem 1.7rem; }
+   208→  .phish-url { font-family: var(--font-mono); font-size: clamp(0.68rem, 1.6vw, 0.85rem); line-height: 1.9; background: var(--bg-deep); border: 1px solid var(--line-strong); border-radius: 12px; padding: 0.85rem 1rem; overflow-x: auto; white-space: nowrap; margin-bottom: 1.1rem; box-shadow: inset 0 0 26px rgba(0, 0, 0, 0.6); }
+   209→  .seg-scheme { color: #ffffff; background: rgba(255, 255, 255, 0.22); border-radius: 4px; padding: 2px 3px; }
+   210→  .seg-brand { color: #ffffff; background: rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 2px 3px; border-bottom: 2px solid #ffffff; font-weight: 700; }
+   211→  .seg-sub { color: #dcdcdc; background: rgba(255, 255, 255, 0.13); border-radius: 4px; padding: 2px 3px; }
+   212→  .seg-host { color: #050505; background: #ffffff; border-radius: 4px; padding: 2px 3px; font-weight: 600; }
+   213→  .seg-path { color: var(--faint); }
+   214→  .seg-dot { color: var(--faint); }
+   215→  .anatomy-grid { display: grid; gap: 0.65rem; }
+   216→  .anatomy-item { display: grid; grid-template-columns: 118px 1fr; gap: 0.75rem; align-items: baseline; font-size: 0.82rem; }
+   217→  .an-key { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; color: #e8e8e8; }
+   218→  .an-val { color: var(--muted); }
+   219→  .anatomy-caption { margin: 1rem 0 0; border-top: 1px dashed var(--line); padding-top: 0.75rem; }
+   220→  @media (max-width: 576px) { .anatomy-item { grid-template-columns: 1fr; gap: 0.15rem; } }
+   221→
+   222→  /* ---------- tools ---------- */
+   223→  .tools-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6rem; margin-top: 1.3rem; align-items: start; }
+   224→  @media (max-width: 991.98px) { .tools-grid { grid-template-columns: 1fr; max-width: 680px; margin-left: auto; margin-right: auto; } }
+   225→
+   226→  .tool-card { padding: 1.6rem 1.7rem; overflow: hidden; }
+   227→  .tool-head { display: flex; align-items: center; gap: 0.85rem; margin-bottom: 0.7rem; }
+   228→  .tool-icon { flex: 0 0 auto; width: 54px; height: 54px; display: grid; place-items: center; border-radius: 14px; border: 1px solid var(--line-strong); color: #ffffff; background: rgba(255, 255, 255, 0.06); box-shadow: var(--glow), inset 0 0 18px rgba(255, 255, 255, 0.08); }
+   229→  .tool-tag { font-size: 0.72rem; color: var(--muted); margin: 0; letter-spacing: 0.06em; }
+   230→  .tool-title { font-family: var(--font-display); font-weight: 700; font-size: 1.42rem; margin: 0; }
+   231→  .tool-index { margin-left: auto; font-family: var(--font-display); font-weight: 700; font-size: 2rem; color: transparent; -webkit-text-stroke: 1.1px rgba(255, 255, 255, 0.4); }
+   232→  .tool-desc { color: var(--muted); font-size: 0.86rem; margin-bottom: 1.1rem; }
+   233→  .tool-desc strong { color: var(--text); }
+   234→
+   235→  .field-label { display: block; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); margin-bottom: 0.4rem; }
+   236→  .input-shell { position: relative; display: flex; align-items: center; }
+   237→  .input-icon { position: absolute; left: 14px; color: var(--faint); pointer-events: none; z-index: 2; }
+   238→  .cyber-input { width: 100%; font-family: var(--font-mono); font-size: 0.9rem; color: var(--text); background: rgba(3, 3, 3, 0.75); border: 1px solid var(--line); border-radius: 12px; padding: 0.82rem 1rem 0.82rem 2.6rem; transition: border-color .2s, box-shadow .2s; caret-color: #ffffff; }
+   239→  .cyber-input::placeholder { color: #565656; }
+   240→  .cyber-input:hover { border-color: rgba(255, 255, 255, 0.28); }
+   241→  .cyber-input:focus { outline: none; border-color: #ffffff; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.16), var(--glow); background: #070707; }
+   242→  .cyber-input[aria-invalid="true"] { border-color: #ffffff; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3); }
+   243→  .pass-shell .cyber-input { padding-right: 5.2rem; }
+   244→  .icon-toggle { position: absolute; right: 10px; width: 36px; height: 36px; display: grid; place-items: center; color: var(--faint); background: transparent; border: 1px solid transparent; border-radius: 9px; transition: color .2s, background .2s; z-index: 2; }
+   245→  .icon-toggle:hover { color: #ffffff; background: rgba(255, 255, 255, 0.09); }
+   246→  .icon-toggle + .icon-toggle { right: 50px; }
+   247→  .field-hint { font-size: 0.74rem; color: var(--faint); margin: 0.4rem 0 0; }
+   248→  .field-hint b { color: #ffffff; font-family: var(--font-mono); }
+   249→  .field-error { font-size: 0.8rem; color: #ffffff; background: rgba(255, 255, 255, 0.12); border: 1px solid var(--line-strong); border-radius: 10px; padding: 0.5rem 0.7rem; margin: 0.5rem 0 0; }
+   250→
+   251→  .try-row { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin: 0.7rem 0 0.2rem; }
+   252→  .try-label { font-family: var(--font-mono); font-size: 0.72rem; color: var(--faint); }
+   253→  .sample-chip { font-family: var(--font-mono); font-size: 0.7rem; color: var(--muted); background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.26); border-radius: 999px; padding: 0.32rem 0.75rem; transition: color .2s, border-color .2s, box-shadow .2s; }
+   254→  .sample-chip:hover { color: #ffffff; border-color: #ffffff; box-shadow: var(--glow); }
+   255→
+   256→  .btn-row { display: flex; gap: 0.7rem; margin-top: 0.85rem; }
+   257→  .btn-row .flex-grow-1 { flex: 1 1 auto; }
+   258→
+   259→  /* link result */
+   260→  .tool-result { margin-top: 1.15rem; border-top: 1px solid var(--line); padding-top: 1.1rem; animation: resultIn .38s ease both; }
+   261→  @keyframes resultIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+   262→  .verdict-row { display: flex; align-items: center; gap: 1.1rem; margin-bottom: 0.7rem; flex-wrap: wrap; }
+   263→  .verdict-badge { font-family: var(--font-display); font-weight: 700; font-size: 1.02rem; letter-spacing: 0.12em; padding: 0.5rem 1.15rem; border-radius: 10px; border: 1px solid; }
+   264→  .verdict-badge.v-safe { color: #050505; border-color: #f5f5f5; background: #f5f5f5; box-shadow: 0 0 26px rgba(255, 255, 255, 0.4); }
+   265→  .verdict-badge.v-suspicious { color: #ffffff; border-color: rgba(255, 255, 255, 0.55); background: rgba(255, 255, 255, 0.08); box-shadow: 0 0 20px rgba(255, 255, 255, 0.18); }
+   266→  .verdict-badge.v-risky { color: #ffffff; border-color: #ffffff; background: #050505; box-shadow: 0 0 30px rgba(255, 255, 255, 0.4); animation: riskyPulse 1.5s ease-in-out infinite; }
+   267→  @keyframes riskyPulse { 0%, 100% { box-shadow: 0 0 16px rgba(255, 255, 255, 0.28); } 50% { box-shadow: 0 0 38px rgba(255, 255, 255, 0.55); } }
+   268→  .gauge-wrap { flex: 1 1 150px; min-width: 150px; }
+   269→  .gauge-track { height: 12px; border-radius: 999px; background: var(--bg-deep); border: 1px solid var(--line-strong); overflow: hidden; }
+   270→  .gauge-fill { height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #8c8c8c, #c9c9c9 45%, #ffffff); transition: width .7s cubic-bezier(.22, 1, .36, 1); box-shadow: 0 0 12px rgba(255, 255, 255, 0.45); }
+   271→  .gauge-meta { display: flex; align-items: baseline; gap: 0.3rem; margin-top: 0.3rem; font-family: var(--font-mono); }
+   272→  .gauge-meta #linkScoreNum { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+   273→  .gauge-max { font-size: 0.68rem; color: var(--faint); }
+   274→
+   275→  .dest-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.85rem; }
+   276→  .dest-chip { font-family: var(--font-mono); font-size: 0.66rem; color: var(--faint); border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); border-radius: 8px; padding: 0.28rem 0.55rem; max-width: 100%; }
+   277→  .dest-chip b { color: #ffffff; font-weight: 600; word-break: break-all; }
+   278→
+   279→  .findings-head { margin: 0.85rem 0 0.45rem; text-transform: none; }
+   280→  .findings-head:first-of-type { margin-top: 0.2rem; }
+   281→  .findings-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.42rem; max-height: 235px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #4f4f4f transparent; padding-right: 4px; }
+   282→  .finding { display: flex; gap: 0.55rem; align-items: flex-start; font-size: 0.8rem; color: var(--muted); background: rgba(3, 3, 3, 0.55); border: 1px solid var(--line); border-left-width: 3px; border-radius: 10px; padding: 0.45rem 0.6rem; }
+   283→  .finding b { color: var(--text); font-weight: 600; }
+   284→  .finding .f-pts { margin-left: auto; font-family: var(--font-mono); font-size: 0.68rem; color: var(--faint); white-space: nowrap; padding-top: 2px; }
+   285→  .finding.f-bad { border-left-color: #ffffff; } .finding.f-bad b { color: #ffffff; }
+   286→  .finding.f-warn { border-left-color: #a8a8a8; } .finding.f-warn b { color: #e8e8e8; }
+   287→  .finding.f-info { border-left-color: #5d5d5d; }
+   288→  .finding.f-ok { border-left-color: #f5f5f5; border-style: solid; } .finding.f-ok b { color: #ffffff; }
+   289→  .f-icon { flex: 0 0 auto; margin-top: 1px; }
+   290→  .f-bad .f-icon { color: #ffffff; } .f-warn .f-icon { color: #c9c9c9; } .f-info .f-icon { color: #8c8c8c; } .f-ok .f-icon { color: #f5f5f5; }
+   291→
+   292→  .tips-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.38rem; }
+   293→  .tips-list li { position: relative; padding-left: 1.35rem; font-size: 0.8rem; color: var(--muted); }
+   294→  .tips-list li::before { content: "→"; position: absolute; left: 0; color: #ffffff; font-family: var(--font-mono); }
+   295→  .tips-list li.tip-neutral::before { content: "·"; color: var(--faint); }
+   296→
+   297→  .warn-strip { display: flex; gap: 0.6rem; align-items: flex-start; margin: 0.95rem 0 0; font-size: 0.76rem; color: #e8e8e8; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line-strong); border-radius: 10px; padding: 0.55rem 0.7rem; }
+   298→  .warn-strip svg { flex: 0 0 auto; color: #ffffff; margin-top: 1px; }
+   299→  .warn-strip strong { color: #ffffff; }
+   300→
+   301→  /* password tool */
+   302→  .pass-meter-row { display: flex; align-items: center; gap: 0.8rem; margin: 0.75rem 0 0.3rem; }
+   303→  .pass-meter { flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+   304→  .pass-meter .seg { height: 10px; border-radius: 5px; background: var(--bg-deep); border: 1px solid var(--line); transition: background .3s, box-shadow .3s, border-color .3s; }
+   305→  .pass-meter.s1 .seg:nth-child(-n+1) { background: #6e6e6e; border-color: #a8a8a8; box-shadow: 0 0 9px rgba(255,255,255,.25); }
+   306→  .pass-meter.s2 .seg:nth-child(-n+2) { background: #8c8c8c; border-color: #c9c9c9; box-shadow: 0 0 10px rgba(255,255,255,.32); }
+   307→  .pass-meter.s3 .seg:nth-child(-n+3) { background: #b8b8b8; border-color: #e3e3e3; box-shadow: 0 0 11px rgba(255,255,255,.4); }
+   308→  .pass-meter.s4 .seg:nth-child(-n+4) { background: #dedede; border-color: #ffffff; box-shadow: 0 0 13px rgba(255,255,255,.5); }
+   309→  .pass-meter.s5 .seg:nth-child(-n+5) { background: #ffffff; border-color: #ffffff; box-shadow: 0 0 16px rgba(255,255,255,.65); }
+   310→  .pass-label { font-family: var(--font-display); font-weight: 600; font-size: 0.8rem; letter-spacing: 0.06em; min-width: 96px; text-align: right; margin: 0; color: var(--muted); text-transform: uppercase; }
+   311→  .pass-label.l1, .pass-label.l2 { color: #a8a8a8; }
+   312→  .pass-label.l3 { color: #d4d4d4; }
+   313→  .pass-label.l4 { color: #ffffff; }
+   314→  .pass-label.l5 { color: #ffffff; text-shadow: 0 0 14px rgba(255, 255, 255, 0.6); }
+   315→  .crack-line { margin: 0.1rem 0 0.75rem; }
+   316→  .crack-line b { color: var(--text); }
+   317→
+   318→  .checklist { list-style: none; padding: 0; margin: 0 0 0.2rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.7rem; }
+   319→  .checklist li { display: flex; align-items: center; gap: 0.45rem; font-size: 0.78rem; color: var(--faint); transition: color .25s; }
+   320→  .checklist li em { color: var(--faint); font-style: normal; font-size: 0.68rem; opacity: .8; }
+   321→  .ck-box { flex: 0 0 auto; width: 17px; height: 17px; border-radius: 5px; border: 1.5px solid var(--line-strong); display: inline-grid; place-items: center; transition: all .25s; }
+   322→  .checklist li.on { color: #ffffff; }
+   323→  .checklist li.on em { color: #dcdcdc; opacity: 1; }
+   324→  .checklist li.on .ck-box { background: #ffffff; border-color: #ffffff; box-shadow: 0 0 10px rgba(255, 255, 255, 0.5); }
+   325→  .checklist li.on .ck-box::after { content: ""; width: 8px; height: 5px; border-left: 2px solid #050505; border-bottom: 2px solid #050505; transform: rotate(-45deg) translate(0.5px, -1px); }
+   326→  @media (max-width: 480px) { .checklist { grid-template-columns: 1fr; } }
+   327→
+   328→  .pass-actions { display: flex; gap: 0.6rem; margin-top: 0.75rem; flex-wrap: wrap; }
+   329→  .gen-note { margin: 0.4rem 0 0; }
+   330→
+   331→  .privacy-strip { display: flex; gap: 0.6rem; align-items: flex-start; font-size: 0.76rem; color: #ffffff; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line-strong); border-radius: 10px; padding: 0.6rem 0.75rem; margin: 0.9rem 0 0; }
+   332→  .privacy-strip svg { color: #ffffff; flex: 0 0 auto; margin-top: 1px; }
+   333→  .privacy-strip strong { color: #ffffff; }
+   334→  .privacy-strip code { color: #ffffff; background: rgba(255, 255, 255, 0.09); }
+   335→  .nist-note { font-size: 0.75rem; color: var(--faint); margin: 0.6rem 0 0; border-left: 2px solid var(--line-strong); padding-left: 0.7rem; }
+   336→  .nist-note strong { color: var(--muted); }
+   337→  .nist-note em { color: var(--muted); }
+   338→
+   339→  /* how it works */
+   340→  .mini-panel { padding: 1.35rem 1.45rem; }
+   341→  .mini-step { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.22em; color: var(--muted); margin: 0 0 0.4rem; }
+   342→  .mini-title { font-family: var(--font-display); font-weight: 600; font-size: 1.08rem; margin: 0 0 0.45rem; }
+   343→  .mini-body { color: var(--muted); font-size: 0.85rem; margin: 0 0 0.7rem; }
+   344→  .mini-body strong, .mini-body b { color: var(--text); }
+   345→  .mini-mono { border-top: 1px dashed var(--line); padding-top: 0.6rem; margin: 0; color: #dcdcdc; opacity: 0.9; }
+   346→
+   347→  /* limitations */
+   348→  .limits-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1.2rem; }
+   349→  @media (max-width: 991.98px) { .limits-grid { grid-template-columns: repeat(2, 1fr); } }
+   350→  @media (max-width: 640px) { .limits-grid { grid-template-columns: 1fr; } }
+   351→  .limit-item { display: flex; gap: 0.8rem; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 0.95rem 1rem; backdrop-filter: blur(10px); }
+   352→  .limit-no { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; color: transparent; -webkit-text-stroke: 1px rgba(255, 255, 255, 0.6); line-height: 1.1; }
+   353→  .limit-item h3 { font-size: 0.92rem; font-weight: 700; margin: 0 0 0.3rem; color: var(--text); }
+   354→  .limit-item p { font-size: 0.8rem; color: var(--muted); margin: 0; }
+   355→  .dep-note { display: flex; gap: 0.55rem; align-items: flex-start; font-size: 0.78rem; color: var(--faint); margin: 1.1rem 0 0; }
+   356→  .dep-note svg { color: #ffffff; flex: 0 0 auto; margin-top: 2px; }
+   357→  .dep-note strong { color: var(--muted); }
+   358→
+   359→  /* research & references */
+   360→  .ref-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1rem; margin-top: 1.2rem; }
+   361→  .ref-card { grid-column: span 2; display: flex; gap: 0.8rem; text-decoration: none; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 1.05rem 1.1rem; transition: transform .2s, border-color .25s, box-shadow .25s; color: inherit; backdrop-filter: blur(10px); }
+   362→  .ref-card:nth-child(4), .ref-card:nth-child(5) { grid-column: span 3; }
+   363→  @media (max-width: 991.98px) { .ref-card, .ref-card:nth-child(4), .ref-card:nth-child(5) { grid-column: span 3; } }
+   364→  @media (max-width: 720px) { .ref-card, .ref-card:nth-child(4), .ref-card:nth-child(5) { grid-column: span 6; } }
+   365→  .ref-card:hover { transform: translateY(-3px); border-color: var(--line-strong); box-shadow: 0 16px 44px rgba(0, 0, 0, 0.6), var(--glow); }
+   366→  .ref-num { font-family: var(--font-display); font-weight: 700; font-size: 1.3rem; color: transparent; -webkit-text-stroke: 1.1px rgba(255, 255, 255, 0.55); line-height: 1; }
+   367→  .ref-body { display: flex; flex-direction: column; gap: 0.4rem; }
+   368→  .ref-title { font-weight: 600; font-size: 0.86rem; line-height: 1.45; color: var(--text); display: block; }
+   369→  .ref-card:hover .ref-title { color: #ffffff; }
+   370→  .ext { vertical-align: -1px; color: #ffffff; }
+   371→  .ref-desc { font-size: 0.75rem; color: var(--muted); line-height: 1.55; }
+   372→  .ref-desc em { color: var(--text); }
+   373→  .ref-tag { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.1em; color: #dcdcdc; border: 1px solid var(--line-strong); border-radius: 6px; padding: 0.18rem 0.4rem; align-self: flex-start; margin-top: auto; }
+   374→
+   375→  .tech-docs { margin-top: 1.2rem; border: 1px dashed var(--line-strong); border-radius: 16px; padding: 1rem 1.1rem; background: rgba(255, 255, 255, 0.04); backdrop-filter: blur(8px); }
+   376→  .tech-docs-head { margin: 0 0 0.6rem; color: #dcdcdc; }
+   377→  .tech-doc-row { display: flex; gap: 0.8rem; text-decoration: none; color: inherit; border-radius: 12px; padding: 0.6rem 0.7rem; transition: background .2s; }
+   378→  .tech-doc-row:hover { background: rgba(255, 255, 255, 0.07); }
+   379→  .tech-doc-num { font-family: var(--font-display); font-weight: 700; font-size: 1.3rem; color: transparent; -webkit-text-stroke: 1.1px rgba(255, 255, 255, 0.7); line-height: 1; }
+   380→
+   381→  /* footer */
+   382→  .site-footer { position: relative; z-index: 1; margin-top: 58px; border-top: 1px solid var(--line); background: rgba(3, 3, 3, 0.88); backdrop-filter: blur(12px); }
+   383→  .footer-grid { display: grid; grid-template-columns: 1.2fr 1.1fr 0.9fr; gap: 2rem; padding: 2.2rem 0 1.4rem; }
+   384→  @media (max-width: 860px) { .footer-grid { grid-template-columns: 1fr; gap: 1.6rem; } }
+   385→  .footer-brand { display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-display); font-weight: 700; letter-spacing: 0.14em; margin: 0 0 0.6rem; }
+   386→  .footer-brand em { font-style: normal; color: #ffffff; }
+   387→  .footer-blurb { color: var(--muted); font-size: 0.84rem; margin: 0 0 0.55rem; }
+   388→  .footer-mono { color: var(--faint); }
+   389→  .footer-head { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.22em; text-transform: uppercase; color: #ffffff; margin: 0 0 0.6rem; }
+   390→  .run-steps { color: var(--muted); font-size: 0.83rem; padding-left: 1.15rem; margin: 0 0 0.6rem; display: grid; gap: 0.35rem; }
+   391→  .footer-top-link { display: inline-flex; align-items: center; gap: 0.35rem; color: #ffffff; text-decoration: none; font-size: 0.82rem; font-weight: 600; margin-top: 0.5rem; }
+   392→  .footer-top-link:hover { text-decoration: underline; }
+   393→  .footer-bar { border-top: 1px solid var(--line); padding: 0.8rem 0 1.1rem; display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; font-size: 0.73rem; color: var(--faint); }
+   394→  .footer-bar p { margin: 0; }
+   395→  .footer-bar-right { display: inline-flex; align-items: center; gap: 0.45rem; font-family: var(--font-mono); }
+   396→  .ok-dot { width: 8px; height: 8px; border-radius: 50%; background: #ffffff; box-shadow: 0 0 8px #ffffff; }
+   397→
+   398→  /* ============================================================
+   399→     INTRO OVERLAY — 5s ASCII scanner boot · "WRITEON" wordmark
+   400→     ============================================================ */
+   401→  #introScreen { position: fixed; inset: 0; z-index: 100; background: #030303; display: flex; align-items: center; justify-content: center; overflow: hidden; transition: opacity .7s ease, visibility .7s ease; }
+   402→  #introScreen.intro-done { opacity: 0; visibility: hidden; pointer-events: none; }
+   403→  #asciiRain { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+   404→  .intro-grid-bg { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px); background-size: 34px 34px; mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, transparent 30%, #000 78%); -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, transparent 30%, #000 78%); }
+   405→  .intro-card { position: relative; z-index: 2; text-align: center; padding: 2.4rem 3.4rem 2rem; background: rgba(8, 8, 8, 0.62); border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 22px; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 30px 80px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.14); animation: introCardIn .9s cubic-bezier(.22, 1, .36, 1) .15s both; max-width: min(560px, 88vw); }
+   406→  @keyframes introCardIn { from { opacity: 0; transform: translateY(26px) scale(.96); } to { opacity: 1; transform: none; } }
+   407→  .intro-shield { margin: 0 auto 0.6rem; display: block; filter: drop-shadow(0 0 22px rgba(255, 255, 255, 0.4)); animation: introShieldPulse 2.6s ease-in-out infinite; }
+   408→  @keyframes introShieldPulse { 0%, 100% { filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.3)); } 50% { filter: drop-shadow(0 0 34px rgba(255, 255, 255, 0.6)); } }
+   409→  .intro-kicker { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.42em; color: var(--faint); margin: 0 0 0.15rem; }
+   410→  .intro-word { font-family: var(--font-display); font-weight: 700; font-size: clamp(3.4rem, 13vw, 5.2rem); line-height: 1; letter-spacing: 0.12em; margin: 0; padding: 0 0.06em; background: linear-gradient(180deg, #ffffff 12%, #e8e8e8 38%, #9c9c9c 72%, #565656 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; text-shadow: none; }
+   411→  .intro-tag { font-family: var(--font-mono); font-size: 0.74rem; color: #dcdcdc; margin: 0.65rem 0 1.15rem; letter-spacing: 0.05em; }
+   412→  .intro-bar { width: min(340px, 66vw); height: 3px; background: rgba(255, 255, 255, 0.12); border-radius: 99px; overflow: hidden; margin: 0 auto 0.75rem; }
+   413→  .intro-bar-fill { height: 100%; width: 0%; background: #ffffff; border-radius: inherit; box-shadow: 0 0 12px rgba(255, 255, 255, 0.7); animation: introBarFill 5s linear forwards; }
+   414→  @keyframes introBarFill { from { width: 0%; } to { width: 100%; } }
+   415→  .intro-status { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.18em; color: var(--faint); margin: 0; }
+   416→  .intro-skip { position: absolute; bottom: 22px; left: 0; right: 0; text-align: center; z-index: 3; font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.2em; color: #565656; margin: 0; animation: skipFadeIn .6s ease 1.4s both; }
+   417→  @keyframes skipFadeIn { from { opacity: 0; } to { opacity: 1; } }
+   418→  @media (prefers-reduced-motion: reduce) {
+   419→    #introScreen { transition: none; }
+   420→    .intro-card, .intro-shield, .intro-skip { animation: none; }
+   421→    .intro-bar-fill { animation: none; width: 100%; }
+   422→  }
+   423→
+   424→  /* ---------- reveal ---------- */
+   425→  .reveal { opacity: 0; transform: translateY(22px); animation: riseIn .7s cubic-bezier(.22, 1, .36, 1) forwards; }
+   426→  .reveal.d1 { animation-delay: .06s; } .reveal.d2 { animation-delay: .13s; } .reveal.d3 { animation-delay: .2s; } .reveal.d4 { animation-delay: .27s; } .reveal.d5 { animation-delay: .34s; } .reveal.d6 { animation-delay: .41s; }
+   427→  @keyframes riseIn { to { opacity: 1; transform: none; } }
+   428→
+   429→  /* ---------- parallax layers ---------- */
+   430→  [data-parallax] { will-change: transform; }
+   431→
+   432→  /* ---------- responsive ---------- */
+   433→  @media (max-width: 991px) {
+   434→    .hero { padding-top: 30px; }
+   435→    .float-chip { display: none; }
+   436→    .hero-visual { min-height: 280px; }
+   437→    .holo-frame { width: min(360px, 92%); }
+   438→  }
+   439→  @media (max-width: 480px) {
+   440→    .brand-text { font-size: 0.9rem; letter-spacing: 0.1em; }
+   441→    .hero-ctas .btn { flex: 1 1 auto; justify-content: center; }
+   442→    .verdict-row { gap: 0.7rem; }
+   443→    .intro-card { padding: 1.8rem 1.6rem 1.5rem; }
+   444→  }
+   445→  @media (prefers-reduced-motion: reduce) {
+   446→    html { scroll-behavior: auto; }
+   447→    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+   448→    .reveal { opacity: 1; transform: none; }
+   449→  }
+   450→  </style>
+   451→  <script data-arena-recording="true">(function(){
+   452→"use strict";
+   453→var SK="__arena_rec",RRWEB_CDN="https://cdn.jsdelivr.net/npm/rrweb@2.0.0-alpha.4/dist/rrweb.min.js";
+   454→var MAX_RECORDING_MS=600000,MAX_RRWEB_EVENTS=30000,MAX_INTERACTIONS=5000,MAX_CURSOR_POINTS=10000,recStopped=false;
+   455→var stored=null;try{var raw=sessionStorage.getItem(SK);if(raw)stored=JSON.parse(raw);}catch(ex){}
+   456→var meta=stored?stored.m||null:null,rrwebEvents=stored?stored.r||[]:[],rrwebStarted=false,startTime=stored?stored.st||Date.now():Date.now();
+   457→var interactions=stored?stored.i||[]:[],cursorPath=stored?stored.c||[]:[],lastCursorSample=0,lastScrollSample=0;
+   458→var pageHeight=document.documentElement.scrollHeight;
+   459→var viewport={width:window.innerWidth,height:window.innerHeight};
+   460→function isCapped(){if(recStopped)return true;if(Date.now()-startTime>=MAX_RECORDING_MS){recStopped=true;return true;}return false;}
+   461→function persist(){try{var d=JSON.stringify({r:rrwebEvents,i:interactions,c:cursorPath,m:meta,st:startTime});sessionStorage.setItem(SK,d);}catch(ex){rrwebEvents=rrwebEvents.slice(Math.floor(rrwebEvents.length/2));try{sessionStorage.setItem(SK,JSON.stringify({r:rrwebEvents,i:interactions,c:cursorPath,m:meta,st:startTime}));}catch(ex2){}}}
+   462→setInterval(persist,5000);
+   463→window.addEventListener("resize",function(){viewport={width:window.innerWidth,height:window.innerHeight};pageHeight=document.documentElement.scrollHeight;});
+   464→document.addEventListener("click",function(e){if(isCapped()||interactions.length>=MAX_INTERACTIONS)return;var el=e.target;var tag=el.tagName?el.tagName.toLowerCase():"";var text=(el.textContent||"").trim().substring(0,80);var classes=el.className&&typeof el.className==="string"?el.className.substring(0,120):"";interactions.push({type:"click",t:Date.now()-startTime,x:Math.round(e.clientX),y:Math.round(e.clientY),element:{tag:tag,text:text,classes:classes}});},true);
+   465→window.addEventListener("scroll",function(){if(isCapped()||interactions.length>=MAX_INTERACTIONS)return;var now=Date.now();if(now-lastScrollSample<200)return;lastScrollSample=now;var scrollY=Math.round(window.scrollY||window.pageYOffset||0);var depthPct=pageHeight>viewport.height?Math.min(100,Math.round(((scrollY+viewport.height)/pageHeight)*100)):100;interactions.push({type:"scroll",t:now-startTime,y:scrollY,depth_pct:depthPct});},{passive:true});
+   466→document.addEventListener("mousemove",function(e){if(isCapped()||cursorPath.length>=MAX_CURSOR_POINTS)return;var now=Date.now();if(now-lastCursorSample<250)return;lastCursorSample=now;cursorPath.push([Math.round(e.clientX),Math.round(e.clientY),now-startTime]);},{passive:true});
+   467→document.addEventListener("keydown",function(e){if(isCapped()||interactions.length>=MAX_INTERACTIONS)return;if(e.target&&(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA"))return;interactions.push({type:"keydown",t:Date.now()-startTime,key:e.key});},true);
+   468→function buildAnalytics(){if(!meta)return null;var ph=document.documentElement.scrollHeight;var maxScroll=0,clickElements={},firstClick=null,firstScroll=null,totalDistance=0;for(var i=0;i<interactions.length;i++){var ev=interactions[i];if(ev.type==="scroll"){if(ev.depth_pct>maxScroll)maxScroll=ev.depth_pct;if(!firstScroll)firstScroll=ev.t;}if(ev.type==="click"){if(!firstClick)firstClick=ev.t;var key=ev.element.tag+":"+ev.element.text.substring(0,30);clickElements[key]=true;}}for(var j=1;j<cursorPath.length;j++){var dx=cursorPath[j][0]-cursorPath[j-1][0];var dy=cursorPath[j][1]-cursorPath[j-1][1];totalDistance+=Math.sqrt(dx*dx+dy*dy);}var duration=Date.now()-startTime;var clickHeatmap=[];for(var k=0;k<interactions.length;k++){if(interactions[k].type==="click")clickHeatmap.push([interactions[k].x,interactions[k].y]);}return{generation_id:meta.generationId,tournament_id:meta.tournamentId,started_at:new Date(startTime).toISOString(),ended_at:new Date().toISOString(),duration_ms:duration,viewport:viewport,page_height:ph,interactions:interactions,cursor_path:cursorPath,click_heatmap:clickHeatmap,summary:{total_clicks:clickHeatmap.length,total_scrolls:interactions.filter(function(e){return e.type==="scroll";}).length,max_scroll_depth_pct:maxScroll,unique_elements_clicked:Object.keys(clickElements).length,time_to_first_click_ms:firstClick,time_to_first_scroll_ms:firstScroll,cursor_distance_px:Math.round(totalDistance),active_time_ms:duration}};}
+   469→function loadRrweb(){if(rrwebStarted)return;rrwebStarted=true;var s=document.createElement("script");s.src=RRWEB_CDN;s.onload=function(){var rec=(window.rrweb&&window.rrweb.record)||window.rrwebRecord;if(!rec)return;rec({emit:function(event){if(rrwebEvents.length>=MAX_RRWEB_EVENTS||isCapped())return;rrwebEvents.push(event);}});};s.onerror=function(){};document.head.appendChild(s);}
+   470→window.addEventListener("message",function(e){if(!e.data||typeof e.data.type!=="string")return;if(e.data.type==="arena:init"){if(!meta)startTime=Date.now();meta={generationId:e.data.generationId||e.data.modelId,tournamentId:e.data.tournamentId};persist();loadRrweb();if(e.source)e.source.postMessage({type:"arena:init-ack",generationId:meta.generationId},"*");}if(e.data.type==="arena:flush"){var resp={type:"arena:recording-data",generationId:meta?meta.generationId:null,rrwebEvents:rrwebEvents,analytics:buildAnalytics()};try{sessionStorage.removeItem(SK);}catch(ex){}if(e.source)e.source.postMessage(resp,"*");}});
+   471→loadRrweb();
+   472→})();</script>
+   473→  <script data-arena-views="true">(function(){var isTop=false;try{isTop=window.self===window.top;}catch(e){}if(!isTop)return;window.__ARENA_META={generationId:"halifax",tournamentId:"5fc2036d-be93-418c-bd02-66c523092db1"};var payload={tournamentId:"5fc2036d-be93-418c-bd02-66c523092db1",modelId:"halifax"};try{var r=document.referrer;if(r){var u=new URL(r);payload.referrerDomain=u.hostname;}}catch(e){}try{var vid=null;try{vid=localStorage.getItem('arena_vid');}catch(e){}if(!vid){vid=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():(Date.now().toString(36)+Math.random().toString(36).slice(2)).slice(0,32);try{localStorage.setItem('arena_vid',vid);}catch(e){}}if(vid)payload.viewerId=vid;}catch(e){}try{fetch("https://www.designarena.ai/api/agon/page-views",{"method":"POST","headers":{"Content-Type":"application/json"},"body":JSON.stringify(payload),"keepalive":true});}catch(e){}})();</script>
+   474→</head>
+   475→
+   476→<body>
+   477→
+   478→  <!-- ════════════ INTRO OVERLAY · 5s ASCII RAIN BOOT ════════════ -->
+   479→  <div id="introScreen" role="status" aria-label="Writeon is starting up">
+   480→    <canvas id="asciiRain" aria-hidden="true"></canvas>
+   481→    <div class="intro-grid-bg" aria-hidden="true"></div>
+   482→    <div class="intro-card">
+   483→      <svg class="intro-shield" viewBox="0 0 96 96" width="96" height="96" aria-hidden="true">
+   484→        <path d="M48 5 86 24v22c0 23-13.6 34.4-38 42C23.6 80.4 10 69 10 46V24L48 5Z" fill="rgba(255,255,255,.07)" stroke="#ffffff" stroke-width="3" stroke-linejoin="round"/>
+   485→        <path d="M48 15 76 29.5V46c0 17.5-10.4 26.6-28 32.6C30.4 72.6 20 63.5 20 46V29.5L48 15Z" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.6"/>
+   486→        <path d="M34 49.5l9.5 9.5L63 37" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+   487→      </svg>
+   488→      <p class="intro-kicker">HACKATHON&nbsp;BUILD</p>
+   489→      <h1 class="intro-word">WRITEON</h1>
+   490→      <p class="intro-tag"><span class="prompt" style="color:#fff">&gt;</span> two tools · one page · no backend</p>
+   491→      <div class="intro-bar" aria-hidden="true"><div class="intro-bar-fill"></div></div>
+   492→      <p class="intro-status" id="introStatus">ESTABLISHING SECURE SCAN…</p>
+   493→    </div>
+   494→    <p class="intro-skip">TAP ANYWHERE OR PRESS ESC TO SKIP</p>
+   495→  </div>
+   496→
+   497→  <!-- ambient light orbs (parallax layer 0) -->
+   498→  <div class="orb orb-a" data-parallax="0.10" aria-hidden="true"></div>
+   499→  <div class="orb orb-b" data-parallax="0.16" aria-hidden="true"></div>
+   500→
+   501→  <a class="skip-link" href="#tools">Skip to tools</a>
+   502→
+   503→  <!-- ══════════════ TOP NAV ══════════════ -->
+   504→  <header class="topnav" id="top">
+   505→    <nav class="container navbar navbar-expand-lg navbar-dark" aria-label="Primary navigation">
+   506→      <a class="navbar-brand brand-mark" href="#top" aria-label="Writeon — home">
+   507→        <svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true" class="brand-shield">
+   508→          <path d="M24 3 42 11v13c0 12.5-7.4 19.6-18 22C13.4 43.6 6 36.5 6 24V11L24 3Z" fill="rgba(255,255,255,.10)" stroke="#ffffff" stroke-width="2.4" stroke-linejoin="round"/>
+   509→          <path d="M24 11.5 34.5 16v8c0 8-4.9 12.8-10.5 14.4C18.4 36.8 13.5 32 13.5 24v-8L24 11.5Z" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="1.6"/>
+   510→          <path d="M18.5 24.2l4.2 4.2 7.6-8.6" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+   511→        </svg>
+   512→        <span class="brand-text">WRITE<em>ON</em></span>
+   513→      </a>
+   514→
+   515→      <button class="navbar-toggler nav-toggle-btn" type="button" aria-controls="siteNav" aria-expanded="false" aria-label="Toggle navigation">
+   516→        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/></svg>
+   517→      </button>
+   518→
+   519→      <div class="collapse navbar-collapse justify-content-end" id="siteNav">
+   520→        <ul class="navbar-nav nav-links">
+   521→          <li class="nav-item"><a class="nav-link" href="#problem">The Problem</a></li>
+   522→          <li class="nav-item"><a class="nav-link" href="#tools">Tools</a></li>
+   523→          <li class="nav-item"><a class="nav-link" href="#how">How it works</a></li>
+   524→          <li class="nav-item"><a class="nav-link" href="#limitations">Limits</a></li>
+   525→          <li class="nav-item"><a class="nav-link" href="#research">Research</a></li>
+   526→        </ul>
+   527→        <span class="nav-chip" title="Built at PW IOI Noida">PW&nbsp;IOI&nbsp;NOIDA<span class="chip-dot"></span></span>
+   528→      </div>
+   529→    </nav>
+   530→  </header>
+   531→
+   532→  <main>
+   533→    <!-- ══════════════ HERO ══════════════ -->
+   534→    <section class="hero container" id="home" aria-labelledby="hero-title">
+   535→      <div class="row g-4 g-lg-5 align-items-center">
+   536→        <div class="col-lg-6">
+   537→          <p class="mono-kicker reveal"><span class="prompt">//</span> writeon_defense — hackathon build 2026</p>
+   538→          <h1 id="hero-title" class="hero-title reveal d1">WRITE<br /><span class="grad-text">ON</span></h1>
+   539→          <p class="hero-sub reveal d2">Check links. Build strong passwords.</p>
+   540→          <p class="mono-line reveal d3"><span class="prompt">&gt;</span> two tools · one page · no backend</p>
+   541→          <p class="hero-lede reveal d4">Phishing hides in plain sight — inside a link that looks almost right, and behind a password like <code>iloveyou123</code>. Writeon gives first-year students and everyday users two fast, honest checks that run entirely on your device.</p>
+   542→          <div class="hero-ctas reveal d5">
+   543→            <a href="#tool-link" class="btn btn-cyber">Analyze a link
+   544→              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+   545→            </a>
+   546→            <a href="#tool-password" class="btn btn-ghost">Check a password</a>
+   547→          </div>
+   548→          <ul class="hero-badges reveal d6" aria-label="Key properties">
+   549→            <li><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 3l8 3.5V12c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6.5L12 3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>100% local — no uploads</li>
+   550→            <li><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Results in milliseconds</li>
+   551→            <li><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M9 12.5l2 2 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>NIST SP 800-63B aligned</li>
+   552→          </ul>
+   553→        </div>
+   554→
+   555→        <div class="col-lg-6">
+   556→          <div class="hero-visual reveal d2" data-parallax="0.07" aria-hidden="true">
+   557→            <div class="holo-frame">
+   558→              <div class="scan-beam"></div>
+   559→              <!-- THE SHIELD — neon white scanner emblem -->
+   560→              <svg class="shield-svg" viewBox="0 0 220 236" role="img" aria-label="Glowing shield scanner emblem">
+   561→                <defs>
+   562→                  <linearGradient id="shieldFill" x1="0" y1="0" x2="1" y2="1">
+   563→                    <stop offset="0" stop-color="#1c1c1c"/><stop offset=".55" stop-color="#141414"/><stop offset="1" stop-color="#0a0a0a"/>
+   564→                  </linearGradient>
+   565→                  <linearGradient id="circuitGrad" x1="0" y1="0" x2="1" y2="0">
+   566→                    <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#8c8c8c"/>
+   567→                  </linearGradient>
+   568→                  <radialGradient id="coreGlow" cx=".5" cy=".46" r=".55">
+   569→                    <stop offset="0" stop-color="#ffffff" stop-opacity=".42"/><stop offset=".55" stop-color="#ffffff" stop-opacity=".06"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+   570→                  </radialGradient>
+   571→                </defs>
+   572→                <circle cx="110" cy="112" r="88" fill="url(#coreGlow)"/>
+   573→                <circle class="orbit-ring" cx="110" cy="112" r="103" fill="none" stroke="#ffffff" stroke-opacity=".32" stroke-width="1.4" stroke-dasharray="4 10"/>
+   574→                <circle cx="110" cy="112" r="103" fill="none" stroke="#ffffff" stroke-opacity=".14" stroke-width="8"/>
+   575→                <path d="M110 14 188 51v58c0 55-33.5 86.5-78 98C65.5 195.5 32 164 32 109V51L110 14Z" fill="url(#shieldFill)" stroke="#ffffff" stroke-width="3" stroke-linejoin="round"/>
+   576→                <path d="M110 30 172 61.5V109c0 45.5-27 72-62 82-35-10-62-36.5-62-82V61.5L110 30Z" fill="none" stroke="rgba(255,255,255,.4)" stroke-opacity=".85" stroke-width="1.8"/>
+   577→                <!-- circuit traces -->
+   578→                <g stroke="url(#circuitGrad)" stroke-width="2" fill="none" stroke-linecap="round" opacity=".95">
+   579→                  <path d="M110 74v18M110 150v-16M64 96l20 10M156 96l-20 10M71 138l18-9M149 138l-18-9"/>
+   580→                </g>
+   581→                <g fill="#ffffff">
+   582→                  <circle cx="110" cy="74" r="3.4"/><circle cx="110" cy="150" r="3.4"/><circle cx="64" cy="96" r="3.4"/><circle cx="156" cy="96" r="3.4"/><circle cx="71" cy="138" r="3.4"/><circle cx="149" cy="138" r="3.4"/>
+   583→                </g>
+   584→                <!-- core keyhole -->
+   585→                <circle cx="110" cy="106" r="15" fill="#050505" stroke="#ffffff" stroke-width="2.4"/>
+   586→                <path d="M110 112v14" stroke="#ffffff" stroke-width="4.6" stroke-linecap="round"/>
+   587→              </svg>
+   588→              <span class="holo-corner tl"></span><span class="holo-corner tr"></span><span class="holo-corner bl"></span><span class="holo-corner br"></span>
+   589→              <p class="holo-caption"><span class="live-dot"></span>threat_surface · scanning</p>
+   590→            </div>
+   591→
+   592→            <!-- floating spec chips (deeper parallax) -->
+   593→            <div class="float-chip chip-a" data-parallax="0.22"><span class="chip-num">0</span> bytes<br/>leave your device</div>
+   594→            <div class="float-chip chip-b" data-parallax="0.3"><span class="mono-mini">&gt; scan_link()</span><br/>21 heuristic signals</div>
+   595→            <div class="float-chip chip-c" data-parallax="0.17"><span class="mono-mini">&gt; check_pass()</span><br/>NIST-length aware</div>
+   596→          </div>
+   597→        </div>
+   598→      </div>
+   599→
+   600→      <!-- signal marquee -->
+   601→      <div class="signal-strip" aria-hidden="true">
+   602→        <div class="signal-track" id="signalTrack">
+   603→          <span>http ≠ https</span><i>◆</i><span>@ trickery</span><i>◆</i><span>punycode xn--</span><i>◆</i><span>lookalike brands</span><i>◆</i><span>400+ char URLs</span><i>◆</i><span>IP-address hosts</span><i>◆</i><span>common passwords</span><i>◆</i><span>sequential runs</span><i>◆</i><span>keyboard walks</span><i>◆</i><span>NIST SP 800-63B</span><i>◆</i><span>offline analysis</span><i>◆</i><span>zero data transmitted</span><i>◆</i>
+   604→        </div>
+   605→      </div>
+   606→    </section>
+   607→
+   608→    <!-- ══════════════ TEAM CARD ══════════════ -->
+   609→    <section class="container" aria-label="Team">
+   610→      <div class="team-card reveal">
+   611→        <div class="team-avatars" aria-hidden="true">
+   612→          <span class="avatar a-1">P</span><span class="avatar a-2">P</span><span class="avatar a-3">Z</span><span class="avatar a-4">A</span>
+   613→        </div>
+   614→        <div class="team-meta">
+   615→          <p class="team-names">Parv <span>·</span> Prince <span>·</span> Zaid <span>·</span> Ajit</p>
+   616→          <p class="team-role">First-year students · Hackathon project · PW IOI Noida</p>
+   617→        </div>
+   618→        <p class="team-right mono-line"><span class="prompt">&gt;</span> built by students, for students<span class="caret">▌</span></p>
+   619→      </div>
+   620→    </section>
+   621→
+   622→    <!-- ══════════════ PROBLEM STATEMENT ══════════════ -->
+   623→    <section class="section container" id="problem" aria-labelledby="problem-title">
+   624→      <p class="mono-kicker reveal"><span class="prompt">//</span> threat_context</p>
+   625→      <h2 id="problem-title" class="section-title reveal d1">The problem, in <span class="grad-text">two clicks</span></h2>
+   626→
+   627→      <div class="row g-4 align-items-stretch mt-1">
+   628→        <div class="col-lg-5">
+   629→          <div class="cyber-panel problem-panel reveal d2 h-100">
+   630→            <p class="panel-head"><span class="panel-tag">01</span>WHY THIS EXISTS</p>
+   631→            <p class="problem-lede">Most people don't get hacked by movie-style exploits. They get hacked by an <em>ordinary link</em> and an <em>ordinary password</em>. Both look fine until they aren't.</p>
+   632→            <ul class="problem-list">
+   633→              <li>
+   634→                <span class="p-icon"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 7l8.5 6 8.5-6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+   635→                <span><strong>Email is the #1 lure.</strong> Phishing arrives disguised as urgent account alerts, invoices, KYC and password resets.</span>
+   636→              </li>
+   637→              <li>
+   638→                <span class="p-icon"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M10 14a5 5 0 0 0 7.1 0l2.4-2.4a5 5 0 0 0-7.1-7.1l-1.3 1.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M14 10a5 5 0 0 0-7.1 0l-2.4 2.4a5 5 0 0 0 7.1 7.1l1.3-1.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+   639→                <span><strong>Lookalike links lie.</strong> @ tricks, punycode and bonus subdomains hide the real destination in plain sight.</span>
+   640→              </li>
+   641→              <li>
+   642→                <span class="p-icon"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="8" cy="15.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M11.5 12 20 3.5M16.5 7l3 3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+   643→                <span><strong>Weak passwords fall fast.</strong> Short or reused passwords are guessable offline, long before any alarm rings.</span>
+   644→              </li>
+   645→            </ul>
+   646→            <p class="problem-foot mono-mini">Context: phishing remains a top initial-access vector — Verizon DBIR · guidance: NIST SP 800-63B · <a href="#research">sources below ↓</a></p>
+   647→          </div>
+   648→        </div>
+   649→
+   650→        <div class="col-lg-7">
+   651→          <figure class="cyber-panel anatomy-panel reveal d3 h-100" aria-label="Anatomy of a phishing URL">
+   652→            <p class="panel-head"><span class="panel-tag">02</span>ANATOMY OF A PHISHING URL</p>
+   653→            <div class="phish-url" role="img" aria-label="A sample malicious URL with its deceptive parts highlighted: hxxps scheme, lookalike brand paypa1 with digit one, stacked subdomains, and the real domain at the end">
+   654→              <span class="seg-scheme">http://</span><span class="seg-brand">paypa1-secure</span><span class="seg-dot">.</span><span class="seg-sub">verify-account.update</span><span class="seg-dot">.</span><span class="seg-host">secure-center.example.net</span><span class="seg-path">/login?session=verify</span>
+   655→            </div>
+   656→            <div class="anatomy-grid">
+   657→              <div class="anatomy-item"><span class="an-key">scheme</span><span class="an-val"><code>http://</code> — no encryption. Padlocks are optional extras for attackers; HTTP is their default.</span></div>
+   658→              <div class="anatomy-item"><span class="an-key">lookalike brand</span><span class="an-val"><code>paypa1</code> — letter &quot;l&quot; swapped for digit &quot;1&quot;. Your eye skims past it; the filter doesn't have to.</span></div>
+   659→              <div class="anatomy-item"><span class="an-key">stacked subdomains</span><span class="an-val"><code>verify-account.update</code> — noise words that imitate official infrastructure. The real owner sits at the end.</span></div>
+   660→              <div class="anatomy-item"><span class="an-key">actual destination</span><span class="an-val"><code>secure-center.example.net</code> — everything before it is decoration. Only this part decides where you land.</span></div>
+   661→            </div>
+   662→            <figcaption class="anatomy-caption mono-mini">// every colored trick above is checkable with plain string math — no magic, no “AI”</figcaption>
+   663→          </figure>
+   664→        </div>
+   665→      </div>
+   666→    </section>
+   667→
+   668→    <!-- ══════════════ TOOLS ══════════════ -->
+   669→    <section class="section container" id="tools" aria-labelledby="tools-title">
+   670→      <p class="mono-kicker reveal"><span class="prompt">//</span> interactive_tools</p>
+   671→      <h2 id="tools-title" class="section-title reveal d1">Two tools. <span class="grad-text">Zero excuses.</span></h2>
+   672→      <p class="section-sub reveal d2">Both tools run locally in this page. Your link is parsed, never sent. Your password is measured, never stored.</p>
+   673→
+   674→      <div class="tools-grid">
+   675→        <!-- ─────────── TOOL 1 · LINK CHECKER ─────────── -->
+   676→        <article class="cyber-panel tool-card" id="tool-link" aria-labelledby="tool-link-title">
+   677→          <div class="tool-head">
+   678→            <span class="tool-icon">
+   679→              <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M10 14a5 5 0 0 0 7.1 0l2.4-2.4a5 5 0 0 0-7.1-7.1l-1.3 1.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 10a5 5 0 0 0-7.1 0l-2.4 2.4a5 5 0 0 0 7.1 7.1l1.3-1.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+   680→            </span>
+   681→            <div>
+   682→              <p class="tool-tag mono-line"><span class="prompt">&gt;</span> scan_link()</p>
+   683→              <h3 id="tool-link-title" class="tool-title">Link Checker</h3>
+   684→            </div>
+   685→            <span class="tool-index">01</span>
+   686→          </div>
+   687→          <p class="tool-desc">Paste any URL. We break it into scheme, host, subdomains and path, then score 20+ lexical warning signs — the same string-level cues phishing researchers measure. <strong>Warning signs, not a guarantee.</strong></p>
+   688→
+   689→          <form id="linkForm" class="tool-form" novalidate>
+   690→            <label class="field-label" for="linkInput">Link to inspect</label>
+   691→            <div class="input-shell">
+   692→              <svg class="input-icon" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M10 14a5 5 0 0 0 7.1 0l2.4-2.4a5 5 0 0 0-7.1-7.1l-1.3 1.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 10a5 5 0 0 0-7.1 0l-2.4 2.4a5 5 0 0 0 7.1 7.1l1.3-1.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+   693→              <input type="text" class="cyber-input" id="linkInput" name="link" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="https://example.com/login-verify…" aria-describedby="linkHint linkError" />
+   694→            </div>
+   695→            <p class="field-hint" id="linkHint">No scheme? We'll assume <code>https://</code> — and say so in the report.</p>
+   696→            <p class="field-error" id="linkError" role="alert" hidden>Please paste a link first.</p>
+   697→
+   698→            <div class="try-row" aria-label="Try a sample link">
+   699→              <span class="try-label">Try:</span>
+   700→              <button type="button" class="sample-chip" data-sample="https://www.wikipedia.org/wiki/Phishing">Trusted</button>
+   701→              <button type="button" class="sample-chip" data-sample="https://secure-login.verify-account.tk/update/billing">Suspicious</button>
+   702→              <button type="button" class="sample-chip" data-sample="http://login.verify-account-update.secure-center.example.net/confirm">High-risk</button>
+   703→            </div>
+   704→
+   705→            <div class="btn-row">
+   706→              <button type="submit" class="btn btn-cyber flex-grow-1" id="analyzeBtn">
+   707→                Analyze Link
+   708→                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+   709→              </button>
+   710→              <button type="button" class="btn btn-ghost-icon" id="resetLinkBtn" aria-label="Clear link and results">
+   711→                <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M4 7h16M9.5 7V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 14.5 5v2M6.5 7l1.2 12a2 2 0 0 0 2 1.9h4.6a2 2 0 0 0 2-1.9L17.5 7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+   712→                Reset
+   713→              </button>
+   714→            </div>
+   715→          </form>
+   716→
+   717→          <!-- Result (populated by JS) -->
+   718→          <div class="tool-result" id="linkResult" hidden aria-live="polite">
+   719→            <div class="verdict-row">
+   720→              <span class="verdict-badge" id="linkVerdictBadge">—</span>
+   721→              <div class="gauge-wrap" aria-hidden="true">
+   722→                <div class="gauge-track"><div class="gauge-fill" id="linkGaugeFill"></div></div>
+   723→                <div class="gauge-meta"><span id="linkScoreNum">0</span><span class="gauge-max">/100 risk</span></div>
+   724→              </div>
+   725→            </div>
+   726→
+   727→            <div class="dest-chips" id="linkDestChips">
+   728→              <span class="dest-chip">Scheme <b id="linkScheme">—</b></span>
+   729→              <span class="dest-chip">Host <b id="linkHost">—</b></span>
+   730→              <span class="dest-chip">Labels <b id="linkLabels">—</b></span>
+   731→              <span class="dest-chip">Port <b id="linkPort">—</b></span>
+   732→            </div>
+   733→
+   734→            <p class="findings-head mono-mini">// threat_analysis — <span id="linkFindingCount">0</span> signals flagged</p>
+   735→            <ul class="findings-list" id="linkFindings"></ul>
+   736→
+   737→            <p class="findings-head mono-mini">// recommended_actions</p>
+   738→            <ul class="tips-list" id="linkTips"></ul>
+   739→
+   740→            <p class="warn-strip"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M12 3 2.5 20h19L12 3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 10v4.2M12 17.2h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span><strong>Warning signs, not a guarantee.</strong> Rule-based, client-side heuristics — not live threat intelligence. A clean score ≠ safe; a bad score ≠ certain.</span></p>
+   741→          </div>
+   742→        </article>
+   743→
+   744→        <!-- ─────────── TOOL 2 · PASSWORD CHECKER ─────────── -->
+   745→        <article class="cyber-panel tool-card" id="tool-password" aria-labelledby="tool-password-title">
+   746→          <div class="tool-head">
+   747→            <span class="tool-icon">
+   748→              <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><rect x="4.5" y="10" width="15" height="10" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 10V7.8a4 4 0 0 1 8 0V10" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/></svg>
+   749→            </span>
+   750→            <div>
+   751→              <p class="tool-tag mono-line"><span class="prompt">&gt;</span> check_pass()</p>
+   752→              <h3 id="tool-password-title" class="tool-title">Password Checker</h3>
+   753→            </div>
+   754→            <span class="tool-index">02</span>
+   755→          </div>
+   756→          <p class="tool-desc">Live, keystroke-by-keystroke strength analysis. NIST SP 800-63B says length beats complexity — so we reward long, memorable passphrases, not symbol soup. <strong>Estimate, not a guarantee.</strong></p>
+   757→
+   758→          <form id="passForm" class="tool-form" novalidate>
+   759→            <label class="field-label" for="passInput">Password or passphrase</label>
+   760→            <div class="input-shell pass-shell">
+   761→              <svg class="input-icon" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><rect x="4.5" y="10" width="15" height="10" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 10V7.8a4 4 0 0 1 8 0V10" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+   762→              <input type="password" class="cyber-input" id="passInput" name="pass" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Type or paste a password…" aria-describedby="passHint passPrivacy" />
+   763→              <button type="button" class="icon-toggle" id="togglePassBtn" aria-pressed="false" aria-label="Show password">
+   764→                <svg class="eye-open" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M2.5 12S6.5 5.8 12 5.8 21.5 12 21.5 12 17.5 18.2 12 18.2 2.5 12 2.5 12Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+   765→                <svg class="eye-closed" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" hidden><path d="M4 4l16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10.6 6.1A9.8 9.8 0 0 1 12 6c5.5 0 9.5 6 9.5 6a17.6 17.6 0 0 1-2.6 3.8M6.6 8.6A17 17 0 0 0 2.5 12S6.5 18 12 18a9.3 9.3 0 0 0 3-.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+   766→              </button>
+   767→              <button type="button" class="icon-toggle" id="clearPassBtn" aria-label="Clear password">
+   768→                <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+   769→              </button>
+   770→            </div>
+   771→            <p class="field-hint" id="passHint"><span id="passCharCount">0</span> characters · estimated entropy <b id="passEntropy">0</b> bits</p>
+   772→
+   773→            <div class="pass-meter-row" role="group" aria-label="Password strength meter">
+   774→              <div class="pass-meter" id="passMeter" aria-hidden="true">
+   775→                <span class="seg" data-seg="1"></span><span class="seg" data-seg="2"></span><span class="seg" data-seg="3"></span><span class="seg" data-seg="4"></span><span class="seg" data-seg="5"></span>
+   776→              </div>
+   777→              <p class="pass-label" id="passLabel" role="status" aria-live="polite">Awaiting input</p>
+   778→            </div>
+   779→            <p class="crack-line mono-mini">rough offline-crack estimate: <b id="passCrackTime">—</b></p>
+   780→
+   781→            <ul class="checklist" id="passChecklist" aria-label="Strength indicators">
+   782→              <li data-check="len8"><span class="ck-box"></span>≥ 8 characters <em>(ok with MFA)</em></li>
+   783→              <li data-check="len15"><span class="ck-box"></span>≥ 15 characters <em>(NIST single-factor)</em></li>
+   784→              <li data-check="common"><span class="ck-box"></span>Not on common-password lists</li>
+   785→              <li data-check="pattern"><span class="ck-box"></span>No obvious sequences or repeats</li>
+   786→              <li data-check="variety"><span class="ck-box"></span>Good length &amp; entropy headroom</li>
+   787→            </ul>
+   788→
+   789→            <p class="findings-head mono-mini">// improvement_tips</p>
+   790→            <ul class="tips-list" id="passTips"><li class="tip-neutral">Start typing — tips will appear as you go.</li></ul>
+   791→
+   792→            <div class="pass-actions">
+   793→              <button type="button" class="btn btn-ghost btn-sm" id="genPassBtn">
+   794→                <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M12 3l1.7 4.6L18.5 9l-4.8 1.4L12 15l-1.7-4.6L5.5 9l4.8-1.4L12 3Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M19 13l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+   795→                Suggest a passphrase
+   796→              </button>
+   797→              <button type="button" class="btn btn-ghost btn-sm" id="copyPassBtn">
+   798→                <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5.5 15.5v-9a2 2 0 0 1 2-2h9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+   799→                <span id="copyPassLabel">Copy</span>
+   800→              </button>
+   801→            </div>
+   802→            <p class="mono-mini gen-note">passphrases are generated locally with <code>crypto.getRandomValues()</code> — nothing is sent anywhere</p>
+   803→
+   804→            <p class="privacy-strip" id="passPrivacy">
+   805→              <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M12 3l8 3.5V12c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6.5L12 3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.5 12.2l1.9 1.9 3.4-3.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+   806→              <span><strong>Private by construction.</strong> Your password never leaves this page — no transmission, no logging, no localStorage, no cookies, no analytics, no external password APIs. Analysis is local JavaScript math, and this page's own code is inspectable.</span>
+   807→            </p>
+   808→            <p class="nist-note"><strong>NIST SP 800-63B:</strong> use ≥ 15 characters when a password is your only sign-in factor; 8+ may be acceptable <em>with</em> MFA. Long, memorable passphrases beat short symbol soup — and length rules beat composition rules.</p>
+   809→          </form>
+   810→        </article>
+   811→      </div>
+   812→    </section>
+   813→
+   814→    <!-- ══════════════ HOW IT WORKS ══════════════ -->
+   815→    <section class="section container" id="how" aria-labelledby="how-title">
+   816→      <p class="mono-kicker reveal"><span class="prompt">//</span> how_it_works</p>
+   817→      <h2 id="how-title" class="section-title reveal d1">Transparent, boring, <span class="grad-text">honest math</span></h2>
+   818→      <div class="row g-4 mt-1">
+   819→        <div class="col-md-4">
+   820→          <div class="cyber-panel mini-panel reveal d1 h-100">
+   821→            <p class="mini-step">STEP 1</p>
+   822→            <h3 class="mini-title">Input stays on-device</h3>
+   823→            <p class="mini-body">The page parses your URL string or measures your password in JavaScript, in this tab. There is no server-side component — nothing to intercept, nothing to leak.</p>
+   824→            <p class="mono-mini mini-mono">fetch(&quot;/analyze&quot;) → never happens</p>
+   825→          </div>
+   826→        </div>
+   827→        <div class="col-md-4">
+   828→          <div class="cyber-panel mini-panel reveal d2 h-100">
+   829→            <p class="mini-step">STEP 2</p>
+   830→            <h3 class="mini-title">Signals get scored</h3>
+   831→            <p class="mini-body"><strong>Links:</strong> scheme, IP hosts, label depth, length, @ placement, punycode, risky TLDs, brand-lookalikes and more are weighted into a 0–100 risk score → <b>SAFE / SUSPICIOUS / RISKY</b>.<br /><strong>Passwords:</strong> length (NIST-weighted), entropy estimate, common-list match, sequences and repeats → five strength bands.</p>
+   832→            <p class="mono-mini mini-mono">heuristic_score = Σ signals − patterns</p>
+   833→          </div>
+   834→        </div>
+   835→        <div class="col-md-4">
+   836→          <div class="cyber-panel mini-panel reveal d3 h-100">
+   837→            <p class="mini-step">STEP 3</p>
+   838→            <h3 class="mini-title">You get the reasoning</h3>
+   839→            <p class="mini-body">Every point on the score is explained in plain language — which signal fired, why it matters, and what to do next. No black boxes, no “trust the badge”.</p>
+   840→            <p class="mono-mini mini-mono">score → explanation → action</p>
+   841→          </div>
+   842→        </div>
+   843→      </div>
+   844→    </section>
+   845→
+   846→    <!-- ══════════════ LIMITATIONS ══════════════ -->
+   847→    <section class="section container" id="limitations" aria-labelledby="limits-title">
+   848→      <p class="mono-kicker reveal"><span class="prompt">//</span> known_limits</p>
+   849→      <h2 id="limits-title" class="section-title reveal d1">What this <span class="grad-text">can't</span> see</h2>
+   850→      <div class="limits-grid">
+   851→        <div class="limit-item reveal d1"><span class="limit-no">01</span><div><h3>False positives happen</h3><p>Long, parameter-heavy links from Google, GitHub or password managers can score “suspicious”. Context matters — when in doubt, navigate manually.</p></div></div>
+   852→        <div class="limit-item reveal d2"><span class="limit-no">02</span><div><h3>False negatives happen</h3><p>A freshly-registered phishing domain with clean strings can sail through lexical checks. This is a first line of defense, not the last.</p></div></div>
+   853→        <div class="limit-item reveal d3"><span class="limit-no">03</span><div><h3>No live threat data</h3><p>We do not query WHOIS, DNS, reputation feeds or blocklists, and we do not follow redirect chains. A real redirect count requires resolving hops — we don't hide the fact that we don't.</p></div></div>
+   854→        <div class="limit-item reveal d1"><span class="limit-no">04</span><div><h3>HTTPS ≠ safe</h3><p>Attackers happily buy certificates. HTTPS only proves encryption in transit — this tool tells you when a link uses HTTP, and never treats HTTPS as proof of legitimacy.</p></div></div>
+   855→        <div class="limit-item reveal d2"><span class="limit-no">05</span><div><h3>Common-password list is finite</h3><p>Our local list covers the most frequently cracked passwords (~150 entries). A password not on it isn't automatically strong — and our check is not a “have I been pwned” service.</p></div></div>
+   856→        <div class="limit-item reveal d3"><span class="limit-no">06</span><div><h3>Meters are estimates</h3><p>Strength meters guide, they don't guarantee. Research on password meters shows they shape behavior — treat this one as a well-informed hint, then use MFA everywhere you can.</p></div></div>
+   857→      </div>
+   858→      <p class="dep-note reveal d2"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span><strong>Dependency transparency:</strong> layout uses Bootstrap 6 (CDN) and webfonts. All analysis — both tools — works locally with zero network calls. “Fully offline” applies to the logic, not to the CDN chrome.</span></p>
+   859→    </section>
+   860→
+   861→    <!-- ══════════════ RESEARCH & REFERENCES ══════════════ -->
+   862→    <section class="section container" id="research" aria-labelledby="research-title">
+   863→      <p class="mono-kicker reveal"><span class="prompt">//</span> research_background</p>
+   864→      <h2 id="research-title" class="section-title reveal d1">Research &amp; <span class="grad-text">Technical References</span></h2>
+   865→      <p class="section-sub reveal d2">Every heuristic in Writeon traces back to published research or official standards. Links open in a new tab. Note: published results describe <em>their</em> models — not our rule-based tool, which is a transparent teaching-grade approximation.</p>
+   866→
+   867→      <div class="ref-grid">
+   868→        <a class="ref-card reveal d1" href="https://pages.nist.gov/800-63-4/sp800-63b.html?utm_source=chatgpt.com#abstract" target="_blank" rel="noopener noreferrer">
+   869→          <span class="ref-num">01</span>
+   870→          <span class="ref-body">
+   871→            <span class="ref-title">NIST SP 800-63B — Digital Identity Guidelines <svg class="ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M14 5h5v5M19 5l-8.5 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 7H6.5A1.5 1.5 0 0 0 5 8.5v9A1.5 1.5 0 0 0 6.5 19h9a1.5 1.5 0 0 0 1.5-1.5V13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+   872→            <span class="ref-desc">Why we reward ≥ 15-character passwords for single-factor sign-in, permit 8+ with MFA, prefer length over composition rules, and support password managers (paste allowed).</span>
+   873→            <span class="ref-tag">STANDARD · PASSWORD POLICY</span>
+   874→          </span>
+   875→        </a>
+   876→
+   877→        <a class="ref-card reveal d2" href="https://www.usenix.org/conference/usenixsecurity12/technical-sessions/presentation/ur" target="_blank" rel="noopener noreferrer">
+   878→          <span class="ref-num">02</span>
+   879→          <span class="ref-body">
+   880→            <span class="ref-title">USENIX Security 2012 — Password Strength Meters <svg class="ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M14 5h5v5M19 5l-8.5 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 7H6.5A1.5 1.5 0 0 0 5 8.5v9A1.5 1.5 0 0 0 6.5 19h9a1.5 1.5 0 0 0 1.5-1.5V13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+   881→            <span class="ref-desc">Egelman, Sotirakopoulos, Muslukhov, Beznosov &amp; Herley — meters measurably steer users toward stronger, harder-to-crack passwords. Backs our five-band meter design and honest-tip wording.</span>
+   882→            <span class="ref-tag">PEER-REVIEWED · METERS CHANGE BEHAVIOR</span>
+   883→          </span>
+   884→        </a>
+   885→
+   886→        <a class="ref-card reveal d3" href="https://www.research.ed.ac.uk/en/publications/a-review-of-human-and-computer-facing-url-phishing-features/" target="_blank" rel="noopener noreferrer">
+   887→          <span class="ref-num">03</span>
+   888→          <span class="ref-body">
+   889→            <span class="ref-title">A Review of Human- and Computer-Facing URL Phishing Features <svg class="ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M14 5h5v5M19 5l-8.5 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 7H6.5A1.5 1.5 0 0 0 5 8.5v9A1.5 1.5 0 0 0 6.5 19h9a1.5 1.5 0 0 0 1.5-1.5V13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+   890→            <span class="ref-desc">University of Edinburgh — systematic review of the lexical URL features used to spot phishing (length, dots, hyphens, tokens, @). Directly informed our Link Checker signal weights.</span>
+   891→            <span class="ref-tag">SYSTEMATIC REVIEW · FEATURE INVENTORY</span>
+   892→          </span>
+   893→        </a>
+   894→
+   895→        <a class="ref-card reveal d1" href="https://arxiv.org/pdf/1301.6899" target="_blank" rel="noopener noreferrer">
+   896→          <span class="ref-num">04</span>
+   897→          <span class="ref-body">
+   898→            <span class="ref-title">PhishAri: Automatic Realtime Phishing Detection on Twitter <svg class="ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M14 5h5v5M19 5l-8.5 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 7H6.5A1.5 1.5 0 0 0 5 8.5v9A1.5 1.5 0 0 0 6.5 19h9a1.5 1.5 0 0 0 1.5-1.5V13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+   899→            <span class="ref-desc">Castillo, Mendoza &amp; Poblete — phishing-URL characteristics and realtime detection in the wild. Informs our choice of lexical, inspectable-without-network indicators.</span>
+   900→            <span class="ref-tag">RESEARCH PAPER · REALTIME DETECTION</span>
+   901→          </span>
+   902→        </a>
+   903→
+   904→        <a class="ref-card reveal d2" href="https://www.jstage.jst.go.jp/article/ipsjjip/32/0/32_973/_pdf/-char/en" target="_blank" rel="noopener noreferrer">
+   905→          <span class="ref-num">05</span>
+   906→          <span class="ref-body">
+   907→            <span class="ref-title">PhiSN: Phishing URL Detection Using Segmentation and NLP Features <svg class="ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M14 5h5v5M19 5l-8.5 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 7H6.5A1.5 1.5 0 0 0 5 8.5v9A1.5 1.5 0 0 0 6.5 19h9a1.5 1.5 0 0 0 1.5-1.5V13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+   908→            <span class="ref-desc">Ishihara &amp; Ogihara — segmentation + NLP features for phishing-URL classification, with strong published results. Their accuracy is <em>theirs</em>; Writeon uses transparent rules, not their model.</span>
+   909→            <span class="ref-tag">RESEARCH PAPER · SEGMENTATION + NLP</span>
+   910→          </span>
+   911→        </a>
+   912→      </div>
+   913→
+   914→      <!-- Implementation documentation — kept deliberately separate from research -->
+   915→      <div class="tech-docs reveal d2" aria-label="Technology documentation">
+   916→        <p class="tech-docs-head mono-mini">// technology_documentation — implementation, not research</p>
+   917→        <a class="tech-doc-row" href="https://getbootstrap.com/docs/6.0/getting-started/install/" target="_blank" rel="noopener noreferrer">
+   918→          <span class="tech-doc-num">06</span>
+   919→          <span class="tech-doc-body">
+   920→            <span class="ref-title">Bootstrap Official Documentation — Getting Started / Installation <svg class="ext" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M14 5h5v5M19 5l-8.5 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 7H6.5A1.5 1.5 0 0 0 5 8.5v9A1.5 1.5 0 0 0 6.5 19h9a1.5 1.5 0 0 0 1.5-1.5V13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+   921→            <span class="ref-desc">The framework powering this page's grid, navbar and buttons — used exactly as the official 6.0 getting-started guide prescribes.</span>
+   922→          </span>
+   923→        </a>
+   924→      </div>
+   925→    </section>
+   926→  </main>
+   927→
+   928→  <!-- ══════════════ FOOTER ══════════════ -->
+   929→  <footer class="site-footer">
+   930→    <div class="container">
+   931→      <div class="footer-grid">
+   932→        <div class="footer-col">
+   933→          <p class="footer-brand"><svg viewBox="0 0 48 48" width="26" height="26" aria-hidden="true"><path d="M24 3 42 11v13c0 12.5-7.4 19.6-18 22C13.4 43.6 6 36.5 6 24V11L24 3Z" fill="rgba(255,255,255,.10)" stroke="#ffffff" stroke-width="2.6" stroke-linejoin="round"/><path d="M18.5 24.2l4.2 4.2 7.6-8.6" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>WRITE<em>ON</em></p>
+   934→          <p class="footer-blurb">Two honest, client-side tools for the most common first-contact cyber mistakes. Built for the classroom, the lab and the demo stage.</p>
+   935→          <p class="mono-mini footer-mono">// warning signs, not a guarantee</p>
+   936→        </div>
+   937→        <div class="footer-col">
+   938→          <p class="footer-head">Runs everywhere</p>
+   939→          <ol class="run-steps">
+   940→            <li>Open Writeon in any modern browser — nothing to install.</li>
+   941→            <li>Both tools work without a server; everything is computed on your device.</li>
+   942→            <li>Bootstrap and webfonts load once from CDNs, like any modern site.</li>
+   943→          </ol>
+   944→          <p class="mono-mini footer-mono">// no account · no server · no tracking</p>
+   945→        </div>
+   946→        <div class="footer-col">
+   947→          <p class="footer-head">The team</p>
+   948→          <p class="team-names small">Parv · Prince · Zaid · Ajit</p>
+   949→          <p class="footer-blurb">First-year students · Hackathon project<br />PW IOI Noida · 2026</p>
+   950→          <a class="footer-top-link" href="#top">Back to top
+   951→            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+   952→          </a>
+   953→        </div>
+   954→      </div>
+   955→      <div class="footer-bar">
+   956→        <p>© 2026 Writeon — Parv, Prince, Zaid, Ajit. Built with HTML · CSS · JS · Bootstrap.</p>
+   957→        <p class="footer-bar-right"><span class="ok-dot"></span>0 passwords logged · 0 links uploaded · 0 tracking</p>
+   958→      </div>
+   959→    </div>
+   960→  </footer>
+   961→
+   962→  <script>
+   963→  /* ============================================================
+   964→     WRITEON — standalone build · no frameworks, no network calls.
+   965→     Tool 1 · scan_link()  — lexical URL heuristics → 0–100 risk
+   966→     Tool 2 · check_pass() — NIST SP 800-63B-aligned local estimate
+   967→     ============================================================ */
+   968→  'use strict';
+   969→
+   970→  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+   971→
+   972→  /* ============================================================
+   973→     INTRO OVERLAY — 5-second ASCII rain boot, skippable
+   974→     ============================================================ */
+   975→  (function initIntro() {
+   976→    const intro = document.getElementById('introScreen');
+   977→    const canvas = document.getElementById('asciiRain');
+   978→    if (!intro || !canvas) return;
+   979→    document.documentElement.classList.add('intro-open');
+   980→    intro.setAttribute('aria-hidden', 'false');
+   981→
+   982→    const INTRO_MS = prefersReducedMotion ? 600 : 5000;
+   983→    const statusEl = document.getElementById('introStatus');
+   984→    const STATUS_LINES = ['ESTABLISHING SECURE SCAN…', 'PARSING THREAT SURFACE…', 'LOADING HEURISTIC ENGINE…', 'ARMING LINK SCANNER…', 'ARMING PASSWORD METER…', 'WRITEON ONLINE'];
+   985→    let statusIdx = 0;
+   986→    const statusTimer = setInterval(() => {
+   987→      statusIdx = Math.min(statusIdx + 1, STATUS_LINES.length - 1);
+   988→      if (statusEl) statusEl.textContent = STATUS_LINES[statusIdx];
+   989→      if (statusIdx >= STATUS_LINES.length - 1) clearInterval(statusTimer);
+   990→    }, INTRO_MS / STATUS_LINES.length);
+   991→
+   992→    // --- ASCII rain (canvas katakana/ASCII glyphs) ---
+   993→    let rafId = null;
+   994→    if (!prefersReducedMotion) {
+   995→      const ctx = canvas.getContext('2d');
+   996→      const GLYPHS = '01<>{}[]#$%&*+=/\\|~^01ABCDEF0123456789ΨΦΞΔΣΩΛΓWRITEON';
+   997→      let cols = 0, drops = [], fontSize = 15;
+   998→
+   999→      const resize = () => {
+  1000→        canvas.width = window.innerWidth;
+  1001→        canvas.height = window.innerHeight;
+  1002→        fontSize = Math.max(13, Math.floor(canvas.width / 90));
+  1003→        cols = Math.ceil(canvas.width / fontSize);
+  1004→        drops = new Array(cols).fill(0).map(() => Math.random() * -60);
+  1005→      };
+  1006→      resize();
+  1007→      window.addEventListener('resize', resize);
+  1008→
+  1009→      let last = 0;
+  1010→      const tick = now => {
+  1011→        rafId = requestAnimationFrame(tick);
+  1012→        if (now - last < 42) return; // ~24fps is plenty for rain
+  1013→        last = now;
+  1014→        // translucent black wash — trails the falling glyphs
+  1015→        ctx.fillStyle = 'rgba(3, 3, 3, 0.16)';
+  1016→        ctx.fillRect(0, 0, canvas.width, canvas.height);
+  1017→        ctx.font = fontSize + 'px "JetBrains Mono", monospace';
+  1018→        for (let i = 0; i < cols; i++) {
+  1019→          const glyph = GLYPHS[(Math.random() * GLYPHS.length) | 0];
+  1020→          const y = drops[i] * fontSize;
+  1021→          const head = y > 0 && Math.random() < 0.08;
+  1022→          ctx.fillStyle = head ? '#ffffff' : (Math.random() < 0.12 ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.42)');
+  1023→          ctx.fillText(glyph, i * fontSize, y);
+  1024→          drops[i] = y > canvas.height + Math.random() * 400 ? Math.random() * -30 : drops[i] + 1;
+  1025→        }
+  1026→      };
+  1027→      rafId = requestAnimationFrame(tick);
+  1028→    }
+  1029→
+  1030→    // --- dismiss ---
+  1031→    let done = false;
+  1032→    const dismiss = () => {
+  1033→      if (done) return;
+  1034→      done = true;
+  1035→      clearInterval(statusTimer);
+  1036→      clearTimeout(autoDismiss);
+  1037→      if (rafId) cancelAnimationFrame(rafId);
+  1038→      intro.setAttribute('aria-hidden', 'true');
+  1039→      intro.classList.add('intro-done');
+  1040→      document.documentElement.classList.remove('intro-open');
+  1041→      window.removeEventListener('keydown', onKey);
+  1042→    };
+  1043→    const onKey = e => { if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') dismiss(); };
+  1044→    window.addEventListener('keydown', onKey);
+  1045→    intro.addEventListener('click', dismiss);
+  1046→    // Hard auto-dismiss after exactly 5 seconds
+  1047→    const autoDismiss = setTimeout(dismiss, INTRO_MS);
+  1048→    // (dismiss clears INTRO_MS timer implicitly via idempotent guard)
+  1049→  })();
+  1050→
+  1051→  /* ============================================================
+  1052→     TOOL 1 — LINK CHECKER
+  1053→     ============================================================ */
+  1054→
+  1055→  const SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
+  1056→
+  1057→  function truncateMiddle(str, max) {
+  1058→    if (str.length <= max) return str;
+  1059→    const half = Math.floor((max - 1) / 2);
+  1060→    return str.slice(0, half) + '…' + str.slice(str.length - half);
+  1061→  }
+  1062→
+  1063→  function splitHostLabels(hostname) {
+  1064→    const labels = hostname.split('.').filter(Boolean);
+  1065→    if (labels.length === 0) return ['unknown'];
+  1066→    return labels;
+  1067→  }
+  1068→
+  1069→  function levenshtein(a, b) {
+  1070→    a = a.toLowerCase(); b = b.toLowerCase();
+  1071→    const m = a.length, n = b.length;
+  1072→    if (Math.abs(m - n) > 2) return Math.max(m, n);
+  1073→    const dp = new Array(n + 1);
+  1074→    for (let j = 0; j <= n; j++) dp[j] = j;
+  1075→    for (let i = 1; i <= m; i++) {
+  1076→      let prev = dp[0]; dp[0] = i;
+  1077→      for (let j = 1; j <= n; j++) {
+  1078→        const tmp = dp[j];
+  1079→        dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+  1080→        prev = tmp;
+  1081→      }
+  1082→    }
+  1083→    return dp[n];
+  1084→  }
+  1085→
+  1086→  function normaliseHomoglyphs(s) {
+  1087→    return s.toLowerCase()
+  1088→      .replace(/0/g, 'o').replace(/1/g, 'l').replace(/3/g, 'e')
+  1089→      .replace(/4/g, 'a').replace(/5/g, 's').replace(/7/g, 't')
+  1090→      .replace(/8/g, 'b').replace(/\$/g, 's').replace(/@/g, 'a')
+  1091→      .replace(/vv/g, 'w');
+  1092→  }
+  1093→
+  1094→  const SHORTENERS = new Set(['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'is.gd', 'cutt.ly', 'ow.ly', 'rebrand.ly', 'shorturl.at', 'rb.gy', 'tiny.cc', 'buff.ly', 't.ly', 's.id']);
+  1095→  const RISKY_TLDS = new Set(['zip', 'mov', 'xyz', 'top', 'tk', 'ml', 'ga', 'cf', 'gq', 'country', 'stream', 'download', 'racing', 'win', 'bid', 'loan', 'work', 'click', 'link', 'rest', 'fit', 'cam', 'quest', 'bond', 'cyou', 'sbs', 'cfd']);
+  1096→  const IMPERSONATED_BRANDS = ['paypal', 'google', 'apple', 'microsoft', 'amazon', 'netflix', 'facebook', 'instagram', 'whatsapp', 'telegram', 'linkedin', 'twitter', 'youtube', 'outlook', 'office365', 'dropbox', 'coinbase', 'binance', 'chase', 'wellsfargo', 'bankofamerica', 'citibank', 'hsbc', 'barclays', 'sbi', 'hdfc', 'icici', 'axisbank', 'paytm', 'phonepe', 'razorpay', 'flipkart', 'snapchat', 'tiktok', 'steam', 'roblox', 'yahoo', 'gmail'];
+  1097→  const TWO_PART_SUFFIXES = new Set(['co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'co.in', 'org.in', 'net.in', 'com.au', 'com.br', 'com.mx', 'com.sg', 'co.jp', 'com.cn', 'com.hk', 'com.tr', 'com.pk', 'com.np', 'com.bd', 'com.my', 'co.za', 'com.ng', 'com.ph', 'com.vn', 'com.sa']);
+  1098→
+  1099→  function analyzeURL(rawInput) {
+  1100→    const findings = [];
+  1101→    const tips = [];
+  1102→    let risk = 0;
+  1103→    const add = (level, points, title, detail) => {
+  1104→      findings.push({ level, points, title, detail });
+  1105→      risk += points;
+  1106→    };
+  1107→
+  1108→    let input = (rawInput || '').trim();
+  1109→    if (!input) return null;
+  1110→
+  1111→    let assumedScheme = null;
+  1112→    if (!SCHEME_RE.test(input) && /^[\w-]+(\.[\w-]+)+/.test(input)) {
+  1113→      assumedScheme = 'https';
+  1114→      input = 'https://' + input;
+  1115→    }
+  1116→    if (/^(javascript|data|vbscript|file|about):/i.test(input)) {
+  1117→      return {
+  1118→        verdict: 'RISKY', score: 100, scheme: input.split(':')[0].toLowerCase(),
+  1119→        host: '—', labels: 0, port: '—',
+  1120→        findings: [{ level: 'bad', points: 100, title: 'Executable/native scheme', detail: `“${input.split(':')[0].toLowerCase()}:” links run code or read local files in some contexts. Never paste links like this from messages or emails.` }],
+  1121→        tips: ['Delete the message this link came from.', 'Never copy-paste javascript: or data: URLs.']
+  1122→      };
+  1123→    }
+  1124→
+  1125→    let url;
+  1126→    try {
+  1127→      url = new URL(input);
+  1128→    } catch (err) {
+  1129→      return { error: true, message: 'That doesn’t parse as a valid URL. Check for spaces, missing dots, or stray characters — then try again.' };
+  1130→    }
+  1131→
+  1132→    const scheme = url.protocol.replace(':', '').toLowerCase();
+  1133→    const hostname = (url.hostname || '').toLowerCase();
+  1134→    const labels = splitHostLabels(hostname);
+  1135→    const path = url.pathname || '/';
+  1136→    const fullForLength = url.href;
+  1137→    const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname) || hostname.includes(':');
+  1138→
+  1139→    if (!hostname) {
+  1140→      return { error: true, message: 'No hostname found in that link. Paste the full address, e.g. https://example.com/page.' };
+  1141→    }
+  1142→    const hasUnicodeHost = /[^\x00-\x7F]/.test(hostname) || hostname.includes('xn--');
+  1143→
+  1144→    // 1 · scheme
+  1145→    if (scheme === 'http') {
+  1146→      add('bad', 26, 'Plain HTTP — no encryption', 'Anything you type after clicking can be read or altered in transit. HTTP is never required for a legitimate login page — treat it as suspicious by default.');
+  1147→      tips.push('Never enter credentials on an http:// page. Look for https:// and a padlock you trust.');
+  1148→    } else if (scheme === 'https') {
+  1149→      add('ok', 0, 'Uses HTTPS', 'Good baseline — but HTTPS only encrypts the connection; it does NOT prove the site is legitimate. Phishing sites use certificates too.');
+  1150→    } else {
+  1151→      add('warn', 12, `Unusual scheme “${scheme}:”`, 'Not a standard web scheme. Double-check what this link actually does before opening it.');
+  1152→    }
+  1153→
+  1154→    // 2 · length
+  1155→    const len = fullForLength.length;
+  1156→    if (len > 100) {
+  1157→      const pts = len > 120 ? 20 : 12;
+  1158→      add(len > 120 ? 'bad' : 'warn', pts, `Very long URL (${len} chars)`, 'Long URLs bury the real destination inside tracking parameters and filler tokens. Legitimate services can be long-lived, but this much padding is a classic phishing tell.');
+  1159→      tips.push('Copy the link into this tool on a computer, then compare the visible host with the site it claims to be.');
+  1160→    } else if (len > 74) {
+  1161→      add('info', 6, `Length ${len} chars — some padding`, 'Longer than typical, but not damning. Check the host carefully.');
+  1162→    } else {
+  1163→      add('ok', 0, `Length ${len} chars`, 'Compact URL — easier to eyeball honestly.');
+  1164→    }
+  1165→
+  1166→    // 3 · host structure
+  1167→    const isPrivateish = TWO_PART_SUFFIXES.has(labels.slice(-2).join('.'));
+  1168→    const suffixLen = isPrivateish ? 2 : 1;
+  1169→    const registrable = labels.slice(-(suffixLen + 1)).join('.');
+  1170→    const subdomainLabels = labels.slice(0, labels.length - suffixLen - 1);
+  1171→
+  1172→    if (isIP) {
+  1173→      add('bad', 28, 'IP-address host', `The link points at a raw IP (${hostname}) instead of a domain. Brand-impersonating phishing kits and throwaway command servers often live on bare IPs.`);
+  1174→      tips.push('Treat bare-IP links that ask for logins or payments as hostile until proven otherwise.');
+  1175→    } else {
+  1176→      if (subdomainLabels.length >= 3) {
+  1177→        add('bad', 22, `${subdomainLabels.length} stacked subdomains`, `Everything before “${registrable}” is decoration chosen by the link's owner. Stacked subdomains mimic official-looking infrastructure (e.g. secure.login.${registrable}).`);
+  1178→        tips.push(`Ignore everything before “${registrable}” — that suffix is the real owner of this link.`);
+  1179→      } else if (subdomainLabels.length === 2) {
+  1180→        add('warn', 10, 'Two subdomain labels', `“${subdomainLabels.join('.')}” precede “${registrable}”. Multiple levels are often used to impersonate security or account sub-portals.`);
+  1181→      }
+  1182→      const dotCount = labels.length - 1;
+  1183→      if (dotCount >= 5) {
+  1184→        add('bad', 14, `${dotCount} dots in the hostname`, 'Deep hostname nesting is strongly associated with phishing infrastructure that hides behind many fake levels.');
+  1185→      } else if (dotCount === 4) {
+  1186→        add('warn', 6, 'Four dots in the hostname', 'More nesting than usual — inspect the rightmost two labels before trusting it.');
+  1187→      }
+  1188→      const regLabel = labels[labels.length - suffixLen - 1] || '';
+  1189→      const hyphens = (registrable.match(/-/g) || []).length;
+  1190→      if (hyphens >= 3) {
+  1191→        add('bad', 12, `${hyphens} hyphens in domain`, 'Heavy hyphenation (“secure-account-verify-login.com”) is a signature of keyword-stuffed disposable phishing domains.');
+  1192→      } else if (hyphens >= 1) {
+  1193→        add('info', 5, 'Hyphen in domain', 'A single hyphen is common and innocent — a weak signal on its own.');
+  1194→      }
+  1195→      const longestLabel = labels.reduce((m, l) => Math.max(m, l.length), 0);
+  1196→      if (longestLabel > 22) {
+  1197→        add('warn', 8, `A ${longestLabel}-character hostname label`, 'Extremely long labels often pack random strings or base64-ish blobs used by malware campaigns.');
+  1198→      }
+  1199→    }
+  1200→
+  1201→    // 4 · '@' position — the classic userinfo trick
+  1202→    const atIndex = input.indexOf('@');
+  1203→    if (atIndex !== -1) {
+  1204→      const beforeAt = input.slice(0, atIndex);
+  1205→      const inHostPart = /^[a-z][a-z0-9+.-]*:\/\/[^/]*$/i.test(beforeAt);
+  1206→      if (inHostPart) {
+  1207→        add('bad', 24, '“@” hides the real host', `Everything before “@” is userinfo — the browser discards it as credentials. The actual destination is “${hostname}”, not whatever appears in front of the “@”.`);
+  1208→        tips.push('When you see “@” before the domain, read only the text AFTER it — that is where the link really goes.');
+  1209→      } else {
+  1210→        add('info', 2, '“@” inside the path', 'The “@” is in the path/query, not the authority — a weak signal, likely a mention or email-like parameter.');
+  1211→      }
+  1212→    }
+  1213→
+  1214→    // 5 · credentials-in-URL
+  1215→    if (url.username || url.password) {
+  1216→      add('warn', 8, 'Credentials embedded in the URL', 'http://user:pass@host is legal but almost never legitimate in a link someone sent you.');
+  1217→    }
+  1218→
+  1219→    // 6 · punycode / IDN
+  1220→    if (hasUnicodeHost) {
+  1221→      add('bad', 26, 'Punycode / internationalized host', '“xn--” labels mean the real characters are non-Latin — the #1 technique for homograph attacks (аpple.com with Cyrillic “а”). Rendered glyphs lie to your eyes.');
+  1222→      tips.push('If a link shows “xn--”, expand it with a punycode decoder before trusting it.');
+  1223→    }
+  1224→
+  1225→    // 7 · suspicious keywords (weak, contextual)
+  1226→    const keywordSource = `${hostname}${path}`.toLowerCase();
+  1227→    const KEYWORDS = ['login', 'signin', 'verify', 'verification', 'secure', 'account', 'update', 'confirm', 'bank', 'wallet', 'password', 'credential', 'invoice', 'pay', 'billing', 'refund', 'suspended', 'locked', 'kyc', 'prize', 'gift', 'bonus', 'free'];
+  1228→    const hits = KEYWORDS.filter(k => keywordSource.includes(k));
+  1229→    if (hits.length >= 3) {
+  1230→      add('warn', 12, `Keyword-stuffed URL (${hits.slice(0, 5).join(', ')})`, '“login · verify · secure · account”-type words are deliberately stacked to feel urgent. Genuine services rarely shout this hard in their own URLs.');
+  1231→    } else if (hits.length > 0) {
+  1232→      add('info', hits.length * 3, `Urgency keywords: ${hits.join(', ')}`, 'Security-flavored words are weak contextual signals — a real bank uses “login” too. They only matter stacked together.');
+  1233→    }
+  1234→
+  1235→    // 8 · brand lookalikes & typosquats
+  1236→    if (!isIP) {
+  1237→      const normLabels = labels.map(normaliseHomoglyphs);
+  1238→      const allHostHit = normLabels.some(l => IMPERSONATED_BRANDS.some(b => l.includes(b)));
+  1239→      const core = normLabels[Math.max(0, labels.length - suffixLen - 1)] || normaliseHomoglyphs(labels[0] || '');
+  1240→      const rawCore = (labels[Math.max(0, labels.length - suffixLen - 1)] || '').toLowerCase();
+  1241→      const registrableIsExactBrand = IMPERSONATED_BRANDS.includes(rawCore);
+  1242→
+  1243→      let tokenBrand = null, tokenDist = Infinity;
+  1244→      for (const label of normLabels) {
+  1245→        for (const token of label.split(/-+/).filter(Boolean)) {
+  1246→          for (const brand of IMPERSONATED_BRANDS) {
+  1247→            if (brand.length < 5) continue;
+  1248→            const d = levenshtein(token, brand);
+  1249→            if (d < tokenDist) { tokenDist = d; tokenBrand = brand; }
+  1250→          }
+  1251→        }
+  1252→      }
+  1253→
+  1254→      let brandPts = 0, brandTitle = '', brandDetail = '';
+  1255→      if (allHostHit && !registrableIsExactBrand) {
+  1256→        const brand = IMPERSONATED_BRANDS.find(b => normLabels.some(l => l.includes(b)));
+  1257→        brandPts = 14;
+  1258→        brandTitle = `Host borrows brand “${brand}”`;
+  1259→        brandDetail = `A label in this URL contains the brand “${brand}”, but the registrable domain “${registrable}” is not ${brand}'s own domain — the compound-squat pattern phishers favour.`;
+  1260→      } else if (!registrableIsExactBrand && tokenBrand && tokenDist > 0 && tokenDist <= 2) {
+  1261→        brandPts = tokenDist === 1 ? 26 : 16;
+  1262→        brandTitle = `Token is ${tokenDist} edit${tokenDist > 1 ? 's' : ''} from “${tokenBrand}”`;
+  1263→        brandDetail = `After undoing digit/letter swaps, a hyphenated segment sits ${tokenDist} characters away from “${tokenBrand}”. One swapped glyph is all a lookalike domain needs.`;
+  1264→      } else if (!registrableIsExactBrand) {
+  1265→        const coreHit = IMPERSONATED_BRANDS.find(b => levenshtein(core, b) > 0 && levenshtein(core, b) <= 2 && b.length >= 5);
+  1266→        if (coreHit) {
+  1267→          const d = levenshtein(core, coreHit);
+  1268→          brandPts = d === 1 ? 26 : 16;
+  1269→          brandTitle = `“${rawCore}” is ${d} edit${d > 1 ? 's' : ''} from “${coreHit}”`;
+  1270→          brandDetail = `The registrable label is a near-miss of “${coreHit}” (edit distance ${d}) — classic typosquat / homoglyph fare.`;
+  1271→        }
+  1272→      }
+  1273→      if (brandPts > 0) {
+  1274→        add('bad', brandPts, brandTitle, brandDetail);
+  1275→        tips.push('Type the brand’s address yourself instead of following any link that resembles it.');
+  1276→      }
+  1277→
+  1278→      const pathTokens = normaliseHomoglyphs(path).split(/[^a-z0-9]+/).filter(t => t.length >= 5);
+  1279→      const pathBrand = IMPERSONATED_BRANDS.find(b => b.length >= 5 && pathTokens.includes(b));
+  1280→      if (pathBrand && !registrableIsExactBrand) {
+  1281→        add('warn', 8, `Brand “${pathBrand}” in the path`, 'The host is not the brand’s, but the path invokes its name — designed to pass a quick eyeball while staying on unrelated infrastructure.');
+  1282→      }
+  1283→    }
+  1284→
+  1285→    // 9 · TLD risk
+  1286→    const tld = labels[labels.length - 1] || '';
+  1287→    if (RISKY_TLDS.has(tld)) {
+  1288→      add('warn', 10, `High-abuse TLD “.${tld}”`, 'This TLD is cheap, fast to rotate, and statistically over-represented in phishing campaigns. Weak signal alone — but it stacks.');
+  1289→    }
+  1290→
+  1291→    // 10 · shorteners
+  1292→    if (SHORTENERS.has(registrable)) {
+  1293→      add('warn', 10, 'URL shortener', 'Shorteners erase the destination. The service is neutral — but a stranger’s shortened link is a sealed envelope; you cannot pre-read it.');
+  1294→      tips.push('Expand shorteners with a preview service you trust, or ask the sender to paste the full URL.');
+  1295→    }
+  1296→
+  1297→    // 11 · non-standard port
+  1298→    if (url.port && !['80', '443', '8080', '8443'].includes(url.port)) {
+  1299→      add('warn', 8, `Non-standard port :${url.port}`, 'Legitimate sites rarely make you connect to odd ports. Temporary phishing kits spin up custom ports constantly.');
+  1300→    }
+  1301→
+  1302→    // 12 · encoding & control tricks
+  1303→    const encodedCount = (url.href.match(/%[0-9a-f]{2}/gi) || []).length;
+  1304→    if (encodedCount > 4) {
+  1305→      add('warn', 6, `${encodedCount} percent-encoded characters`, 'Heavy encoding hides the real path/query text from quick inspection — often used to smuggle @ or / inside a “friendly-looking” URL.');
+  1306→    }
+  1307→    if (/\\/.test(input) || input.includes('%5c') || input.includes('%5C')) {
+  1308→      add('warn', 8, 'Backslash tricks', 'Backslashes (or %5C) make one parser read “foo\\@bar” as a path and another as a host separator — a known URL-confusion primitive.');
+  1309→    }
+  1310→
+  1311→    // 13 · query noise
+  1312→    const qLen = (url.search || '').length;
+  1313→    if (qLen > 120) {
+  1314→      add('info', 5, `Very long query string (${qLen} chars)`, 'Bulk tracking parameters are common in marketing links — but they also smuggle referral IDs and session tokens past a quick glance.');
+  1315→    }
+  1316→
+  1317→    // 14 · positives worth naming
+  1318→    if (scheme === 'https' && !isIP && labels.length <= 3 && len <= 74 && hits.length === 0) {
+  1319→      add('ok', 0, 'Clean-looking structure', 'Short, HTTPS, unremarkable host structure. That is genuinely a good sign — remember it is still not proof of safety.');
+  1320→    }
+  1321→
+  1322→    risk = Math.max(0, Math.min(100, Math.round(risk)));
+  1323→
+  1324→    const seenTip = new Set();
+  1325→    const uniqueTips = tips.filter(t => !seenTip.has(t) && seenTip.add(t));
+  1326→    if (uniqueTips.length === 0) {
+  1327→      if (risk === 0) {
+  1328→        uniqueTips.push('No heuristic fired — still double-check the sender and the context before logging in or paying.');
+  1329→      } else {
+  1330→        uniqueTips.push('Pause before clicking: open the official app/site yourself and navigate to the same page instead.');
+  1331→        uniqueTips.push('Never type passwords or card numbers into a page you reached from an unexpected message.');
+  1332→      }
+  1333→    }
+  1334→    if (risk >= 35) {
+  1335→      uniqueTips.push('If you already clicked, change any password you typed on that page immediately — from a trusted device.');
+  1336→    }
+  1337→
+  1338→    const verdict = risk <= 24 ? 'SAFE' : risk <= 59 ? 'SUSPICIOUS' : 'RISKY';
+  1339→
+  1340→    return {
+  1341→      verdict, score: risk,
+  1342→      scheme, isIP,
+  1343→      host: hostname,
+  1344→      labels: labels.length,
+  1345→      port: url.port || (scheme === 'https' ? '443 (default)' : scheme === 'http' ? '80 (default)' : '—'),
+  1346→      registrable,
+  1347→      assumedScheme,
+  1348→      findings, tips: uniqueTips
+  1349→    };
+  1350→  }
+  1351→
+  1352→  const linkForm = document.getElementById('linkForm');
+  1353→  const linkInput = document.getElementById('linkInput');
+  1354→  const linkError = document.getElementById('linkError');
+  1355→  const linkResult = document.getElementById('linkResult');
+  1356→  const badge = document.getElementById('linkVerdictBadge');
+  1357→  const gaugeFill = document.getElementById('linkGaugeFill');
+  1358→  const scoreNum = document.getElementById('linkScoreNum');
+  1359→  const destScheme = document.getElementById('linkScheme');
+  1360→  const destHost = document.getElementById('linkHost');
+  1361→  const destLabels = document.getElementById('linkLabels');
+  1362→  const destPort = document.getElementById('linkPort');
+  1363→  const findingsEl = document.getElementById('linkFindings');
+  1364→  const findingCountEl = document.getElementById('linkFindingCount');
+  1365→  const tipsEl = document.getElementById('linkTips');
+  1366→
+  1367→  const F_ICONS = {
+  1368→    bad: '<svg class="f-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 3 2.5 20h19L12 3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4.4M12 17.4h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  1369→    warn: '<svg class="f-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  1370→    info: '<svg class="f-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  1371→    ok: '<svg class="f-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M9 12.5l2 2 4.5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/></svg>'
+  1372→  };
+  1373→
+  1374→  function setLinkError(msg) {
+  1375→    if (!msg) {
+  1376→      linkError.hidden = true;
+  1377→      linkInput.setAttribute('aria-invalid', 'false');
+  1378→      return;
+  1379→    }
+  1380→    linkError.textContent = msg;
+  1381→    linkError.hidden = false;
+  1382→    linkInput.setAttribute('aria-invalid', 'true');
+  1383→  }
+  1384→
+  1385→  function renderLinkResult(result) {
+  1386→    badge.textContent = result.verdict;
+  1387→    badge.className = 'verdict-badge ' + (result.verdict === 'SAFE' ? 'v-safe' : result.verdict === 'SUSPICIOUS' ? 'v-suspicious' : 'v-risky');
+  1388→
+  1389→    const target = result.score;
+  1390→    if (prefersReducedMotion) {
+  1391→      gaugeFill.style.width = target + '%';
+  1392→      scoreNum.textContent = String(target);
+  1393→    } else {
+  1394→      gaugeFill.style.width = '0%';
+  1395→      const dur = 650, start = performance.now();
+  1396→      const tick = now => {
+  1397→        const p = Math.min(1, (now - start) / dur);
+  1398→        const eased = 1 - Math.pow(2, -6 * p);
+  1399→        scoreNum.textContent = String(Math.round(target * eased));
+  1400→        gaugeFill.style.width = (target * eased) + '%';
+  1401→        if (p < 1) requestAnimationFrame(tick); else { scoreNum.textContent = String(target); gaugeFill.style.width = target + '%'; }
+  1402→      };
+  1403→      requestAnimationFrame(tick);
+  1404→    }
+  1405→
+  1406→    destScheme.textContent = result.scheme.toUpperCase() + (result.assumedScheme ? ' (assumed)' : '');
+  1407→    destHost.textContent = truncateMiddle(result.host, 44);
+  1408→    destLabels.textContent = String(result.labels);
+  1409→    destPort.textContent = String(result.port);
+  1410→
+  1411→    const order = { bad: 0, warn: 1, info: 2, ok: 3 };
+  1412→    const sorted = [...result.findings].sort((a, b) => order[a.level] - order[b.level]);
+  1413→    findingCountEl.textContent = String(sorted.filter(f => f.level === 'bad' || f.level === 'warn').length);
+  1414→    findingsEl.innerHTML = sorted.map(f => (
+  1415→      `<li class="finding f-${f.level}">${F_ICONS[f.level]}<span><b>${escapeHTML(f.title)}.</b> ${escapeHTML(f.detail)}</span>${f.points > 0 ? `<span class="f-pts">+${f.points}</span>` : '<span class="f-pts">0</span>'}</li>`
+  1416→    )).join('');
+  1417→
+  1418→    tipsEl.innerHTML = result.tips.map(t => `<li>${escapeHTML(t)}</li>`).join('');
+  1419→    linkResult.hidden = false;
+  1420→  }
+  1421→
+  1422→  function escapeHTML(s) {
+  1423→    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  1424→  }
+  1425→
+  1426→  linkForm.addEventListener('submit', e => {
+  1427→    e.preventDefault();
+  1428→    const value = linkInput.value.trim();
+  1429→    if (!value) {
+  1430→      setLinkError('Please paste a link first — e.g. https://example.com.');
+  1431→      linkInput.focus();
+  1432→      return;
+  1433→    }
+  1434→    setLinkError(null);
+  1435→    const result = analyzeURL(value);
+  1436→    if (!result) { setLinkError('Please paste a link first.'); return; }
+  1437→    if (result.error) {
+  1438→      setLinkError(result.message);
+  1439→      linkResult.hidden = true;
+  1440→      return;
+  1441→    }
+  1442→    renderLinkResult(result);
+  1443→  });
+  1444→
+  1445→  document.querySelectorAll('.sample-chip').forEach(btn => {
+  1446→    btn.addEventListener('click', () => {
+  1447→      linkInput.value = btn.getAttribute('data-sample') || '';
+  1448→      setLinkError(null);
+  1449→      const result = analyzeURL(linkInput.value);
+  1450→      if (result && !result.error) renderLinkResult(result);
+  1451→      linkInput.focus();
+  1452→    });
+  1453→  });
+  1454→
+  1455→  document.getElementById('resetLinkBtn').addEventListener('click', () => {
+  1456→    linkInput.value = '';
+  1457→    setLinkError(null);
+  1458→    linkResult.hidden = true;
+  1459→    findingsEl.innerHTML = '';
+  1460→    tipsEl.innerHTML = '';
+  1461→    gaugeFill.style.width = '0%';
+  1462→    scoreNum.textContent = '0';
+  1463→    linkInput.focus();
+  1464→  });
+  1465→
+  1466→  /* ============================================================
+  1467→     TOOL 2 — PASSWORD CHECKER
+  1468→     ============================================================ */
+  1469→
+  1470→  // ~160 of the most-frequently-cracked passwords — finite, local, honest
+  1471→  const COMMON_PASSWORDS = new Set(['123456', 'password', '123456789', '12345678', '12345', '1234567', 'qwerty', 'abc123', 'football', 'monkey', 'letmein', 'dragon', '111111', 'baseball', 'iloveyou', 'trustno1', 'sunshine', 'master', '123123', 'welcome', 'shadow', 'ashley', 'michael', 'ninja', 'mustang', 'password1', '1234567890', 'qwerty123', '000000', 'superman', 'hunter', 'computer', 'michelle', 'daniel', 'andrew', 'charlie', 'thomas', 'ranger', 'buster', 'soccer', 'tigger', 'jordan', 'robert', 'matthew', 'starwars', 'whatever', 'freedom', '123abc', 'qazwsx', '121212', 'asdfgh', 'zxcvbn', '1q2w3e4r', 'passw0rd', 'p@ssw0rd', 'p@ssword', 'p@55word', 'admin', 'administrator', 'login', 'pass', 'test', 'guest', 'hello', 'lovely', 'bailey', 'access', 'thunder', '123321', '654321', 'joshua', 'killer', 'george', 'asshole', 'fuckyou', 'trustme', 'nicole', 'jessica', 'pepper', 'ginger', 'cookie', 'robert1', 'soccer1', 'cowboys', 'lakers', 'yankees', 'chelsea', 'arsenal', 'liverpool', 'barcelona', 'manchester', 'pokemon', 'princess', 'orange', 'banana', 'summer', 'winter', 'autumn', 'spring', 'abcdefg', 'abcd1234', 'qwertz', 'q1w2e3r4', 'zaq12wsx', 'pass@123', 'password123', 'abc@123', 'welcome1', 'admin123', 'changeme', 'iloveyou1', 'princess1', 'pokemon1', 'charlie1', 'qwerty1', '1234qwer', 'qwer1234', '1qaz2wsx', 'zaq123', 'silver', 'golden', 'diamond', 'phoenix', 'matrix', 'secret', 'qwert', 'asdf', 'zxcv', 'aaaaaa', '11111111', '1234', 'pass1', 'root', 'toor', 'admin1', 'system', 'oracle', 'support', 'user', 'default', 'temp123', 'india@123', 'india123', 'password@123', 'sharma', 'delhi', 'mumbai', 'lovely123', 'arsenal1', 'chelsea1', 'liverpool1', 'spiderman', 'batman', 'superman1', 'ironman', 'hulk', 'thor', 'captain', 'america', 'winterfell', 'dracarys', 'targaryen', 'harrypotter', 'hermione', 'dumbledore', 'zelda', 'mario', 'luigi', 'yoshi', 'asdfg', 'qazwsxedc', '159753', '147258369', '987654321', '111222333']);
+  1472→
+  1473→  function isCommonish(pw) {
+  1474→    const p = pw.toLowerCase().trim();
+  1475→    if (COMMON_PASSWORDS.has(p)) return { hit: true, what: p };
+  1476→    const stripped = p.replace(/[\d!@#$%^&*._-]{1,3}$/, '');
+  1477→    if (stripped !== p && stripped.length >= 4 && COMMON_PASSWORDS.has(stripped)) {
+  1478→      return { hit: true, what: stripped };
+  1479→    }
+  1480→    return { hit: false };
+  1481→  }
+  1482→
+  1483→  function entropyBits(pw) {
+  1484→    let pool = 0;
+  1485→    if (/[a-z]/.test(pw)) pool += 26;
+  1486→    if (/[A-Z]/.test(pw)) pool += 26;
+  1487→    if (/[0-9]/.test(pw)) pool += 10;
+  1488→    if (/[^a-zA-Z0-9]/.test(pw)) pool += 33;
+  1489→    if (/[^\x00-\x7F]/.test(pw)) pool += 64;
+  1490→    if (pool === 0) return 0;
+  1491→    return Math.round(pw.length * Math.log2(pool));
+  1492→  }
+  1493→
+  1494→  const SEQUENCES = ['abcdefghijklmnopqrstuvwxyz', '01234567890', 'qwertyuiop[]', 'asdfghjkl;', 'zxcvbnm,.', '1qaz2wsx3edc', 'qazwsx', '147258369', 'qweasdzxc', '!@#$%^&*()'];
+  1495→  const REV_SEQUENCES = SEQUENCES.map(s => [...s].reverse().join(''));
+  1496→
+  1497→  function sequenceAnalysis(p) {
+  1498→    const claimed = new Array(p.length).fill(false);
+  1499→    let longest = 0, covered = 0;
+  1500→    const candidates = [];
+  1501→    for (const seq of [...SEQUENCES, ...REV_SEQUENCES]) {
+  1502→      for (let i = 0; i + 3 <= p.length; i++) {
+  1503→        for (let len = 3; len <= Math.min(14, p.length - i); len++) {
+  1504→          if (seq.includes(p.slice(i, i + len))) candidates.push([i, len]);
+  1505→        }
+  1506→      }
+  1507→    }
+  1508→    candidates.sort((a, b) => b[1] - a[1]);
+  1509→    for (const [start, len] of candidates) {
+  1510→      let free = true;
+  1511→      for (let i = start; i < start + len; i++) if (claimed[i]) { free = false; break; }
+  1512→      if (!free) continue;
+  1513→      for (let i = start; i < start + len; i++) claimed[i] = true;
+  1514→      covered += len;
+  1515→      longest = Math.max(longest, len);
+  1516→    }
+  1517→    return { longest, coverage: p.length ? covered / p.length : 0 };
+  1518→  }
+  1519→  function longestSequenceRun(pw) { return sequenceAnalysis(pw.toLowerCase()).longest; }
+  1520→
+  1521→  function longestRepeat(pw) {
+  1522→    let best = 1, cur = 1;
+  1523→    for (let i = 1; i < pw.length; i++) {
+  1524→      if (pw[i] === pw[i - 1]) { cur++; best = Math.max(best, cur); } else cur = 1;
+  1525→    }
+  1526→    const p = pw.toLowerCase();
+  1527→    for (let block = 2; block <= 4; block++) {
+  1528→      for (let i = 0; i + block * 2 <= p.length; i++) {
+  1529→        const unit = p.slice(i, i + block);
+  1530→        let count = 1, j = i + block;
+  1531→        while (p.slice(j, j + block) === unit) { count++; j += block; }
+  1532→        if (count >= 3) best = Math.max(best, block * count);
+  1533→      }
+  1534→    }
+  1535→    return best;
+  1536→  }
+  1537→
+  1538→  function evaluatePassword(pw) {
+  1539→    const len = pw.length;
+  1540→    const entropy = entropyBits(pw);
+  1541→    const seqRun = longestSequenceRun(pw);
+  1542→    const repeatRun = longestRepeat(pw);
+  1543→    const common = isCommonish(pw);
+  1544→
+  1545→    let points = 0;
+  1546→    if (len === 0) points = 0;
+  1547→    else if (len < 8) points = 8 + len * 2;
+  1548→    else if (len < 12) points = 34 + (len - 8) * 4;
+  1549→    else if (len < 15) points = 50 + (len - 12) * 7;
+  1550→    else if (len < 20) points = 71 + (len - 15) * 6;
+  1551→    else points = Math.min(100, 95 + (len - 19) * 1.5);
+  1552→
+  1553→    points += Math.min(10, Math.max(0, (entropy - len * 3.5) * 0.25));
+  1554→
+  1555→    if (common.hit) points -= 45;
+  1556→    if (seqRun >= 5) points -= 14;
+  1557→    else if (seqRun >= 3) points -= 6;
+  1558→    if (repeatRun >= 6) points -= 14;
+  1559→    else if (repeatRun >= 3) points -= 5;
+  1560→    if (/^\d+$/.test(pw)) points -= 10;
+  1561→    if (len > 0 && len < 5) points = Math.min(points, 8);
+  1562→    if (/(19|20)\d{2}$/.test(pw)) points -= 4;
+  1563→
+  1564→    const p = pw.toLowerCase();
+  1565→    const seqCoverage = (seqRun >= 3 && len > 0) ? seqRun / len : 0;
+  1566→    const repeatCoverage = (repeatRun >= 3 && len > 0) ? repeatRun / len : 0;
+  1567→    const distinctChars = new Set(p).size;
+  1568→    const singlePool = distinctChars <= 1 && len > 0;
+  1569→    const seqStats = sequenceAnalysis(p);
+  1570→    const totalSeqCoverage = seqStats.coverage;
+  1571→
+  1572→    if (singlePool) { points = Math.min(points, 14); }
+  1573→    else if (totalSeqCoverage >= 0.7) { points = Math.min(points, 22); }
+  1574→    else if (totalSeqCoverage >= 0.45) { points = Math.min(points, 32); }
+  1575→    else if (seqCoverage >= 0.6) { points = Math.min(points, 30); }
+  1576→    else if (seqCoverage >= 0.4) { points = Math.min(points, 45); }
+  1577→    else if (repeatCoverage >= 0.6) { points = Math.min(points, 30); }
+  1578→    else if (repeatCoverage >= 0.4) { points = Math.min(points, 45); }
+  1579→
+  1580→    points = Math.max(0, Math.min(100, Math.round(points)));
+  1581→
+  1582→    let band, label;
+  1583→    if (len === 0) { band = 0; label = 'Awaiting input'; }
+  1584→    else if (points < 28) { band = 1; label = 'Very Weak'; }
+  1585→    else if (points < 48) { band = 2; label = 'Weak'; }
+  1586→    else if (points < 68) { band = 3; label = 'Fair'; }
+  1587→    else if (points < 86) { band = 4; label = 'Strong'; }
+  1588→    else { band = 5; label = 'Very Strong'; }
+  1589→
+  1590→    const checks = {
+  1591→      len8: len >= 8,
+  1592→      len15: len >= 15,
+  1593→      common: len > 0 && !common.hit,
+  1594→      pattern: len > 0 && seqRun < 3 && repeatRun < 3,
+  1595→      variety: entropy >= 60 && len >= 12
+  1596→    };
+  1597→
+  1598→    let crack = '—';
+  1599→    if (common.hit) {
+  1600→      crack = 'instantly — in common-password lists';
+  1601→    } else if (len > 0) {
+  1602→      const guesses = Math.pow(2, Math.min(entropy, 128)) / 2;
+  1603→      crack = humanizeSeconds(guesses / 1e10);
+  1604→    }
+  1605→
+  1606→    const tips = [];
+  1607→    if (len === 0) {
+  1608→      tips.push('Start typing — analysis runs locally, keystroke by keystroke.');
+  1609→    } else {
+  1610→      if (common.hit) tips.push('Pick a completely different password — anything resembling a common one is effectively public.');
+  1611→      if (len < 8) tips.push('Aim for at least 8 characters — the MFA-assisted floor in NIST SP 800-63B.');
+  1612→      else if (len < 15) tips.push('Push to 15+ characters — NIST’s single-factor recommendation. Length is the cheapest security you can add.');
+  1613→      if (seqRun >= 3) tips.push('Break up sequences — “qwerty”, “abc”, “123” are tried in the first second of any attack.');
+  1614→      if (repeatRun >= 3) tips.push('Avoid runs of one repeated character or repeating blocks (abcabc).');
+  1615→      if (/^\d+$/.test(pw)) tips.push('Add letters — numbers alone collapse your entropy.');
+  1616→      if (tips.length === 0 && band >= 4) {
+  1617→        tips.push('Excellent. Store it in a password manager and never reuse it anywhere else.');
+  1618→        tips.push('This is exactly what a passphrase should look like — long, odd, and memorable to only you.');
+  1619→      } else if (band === 3) {
+  1620→        tips.push('Solid base. Add a few more words to hit passphrase territory (4+ random words).');
+  1621→      }
+  1622→      if (len >= 8 && len < 15) tips.push('Remember: 8 characters is only comfortable when MFA guards the same account.');
+  1623→      if (tips.length < 2) tips.push('A random four-word passphrase (e.g. “violet-trombone-cafeteria-lantern”) beats “P@ssw0rd!” every time.');
+  1624→    }
+  1625→
+  1626→    return { points, band, label, checks, tips, entropy, crack, len };
+  1627→  }
+  1628→
+  1629→  function humanizeSeconds(s) {
+  1630→    if (s < 1) return 'instantly';
+  1631→    const units = [[31557600, 'years'], [2592000, 'months'], [86400, 'days'], [3600, 'hours'], [60, 'minutes'], [1, 'seconds']];
+  1632→    for (const [sec, name] of units) {
+  1633→      if (s >= sec) {
+  1634→        const v = s / sec;
+  1635→        const nice = v >= 100 ? Math.round(v).toLocaleString() : Math.round(v * 10) / 10;
+  1636→        if (name === 'years' && v > 1e6) {
+  1637→          if (v > 1e12) return 'heat-death of the universe';
+  1638→          if (v > 1e9) return 'billions of years';
+  1639→          if (v > 1e6) return 'millions of years';
+  1640→        }
+  1641→        return `~${nice} ${name}`;
+  1642→      }
+  1643→    }
+  1644→    return 'instantly';
+  1645→  }
+  1646→
+  1647→  const passInput = document.getElementById('passInput');
+  1648→  const togglePassBtn = document.getElementById('togglePassBtn');
+  1649→  const clearPassBtn = document.getElementById('clearPassBtn');
+  1650→  const passMeter = document.getElementById('passMeter');
+  1651→  const passLabel = document.getElementById('passLabel');
+  1652→  const passEntropy = document.getElementById('passEntropy');
+  1653→  const passCrackTime = document.getElementById('passCrackTime');
+  1654→  const passCharCount = document.getElementById('passCharCount');
+  1655→  const passTips = document.getElementById('passTips');
+  1656→  const checklistItems = document.querySelectorAll('#passChecklist li');
+  1657→  const genPassBtn = document.getElementById('genPassBtn');
+  1658→  const copyPassBtn = document.getElementById('copyPassBtn');
+  1659→  const copyPassLabel = document.getElementById('copyPassLabel');
+  1660→
+  1661→  const eyeOpen = togglePassBtn.querySelector('.eye-open');
+  1662→  const eyeClosed = togglePassBtn.querySelector('.eye-closed');
+  1663→
+  1664→  function renderPassword() {
+  1665→    const pw = passInput.value; // held only in memory; never stored/logged/transmitted
+  1666→    const r = evaluatePassword(pw);
+  1667→
+  1668→    passCharCount.textContent = String(pw.length);
+  1669→    passEntropy.textContent = String(r.entropy);
+  1670→    passCrackTime.textContent = r.crack;
+  1671→
+  1672→    passMeter.className = 'pass-meter' + (r.band ? ` s${r.band}` : '');
+  1673→    passLabel.textContent = r.label;
+  1674→    passLabel.className = 'pass-label' + (r.band ? ` l${r.band}` : '');
+  1675→
+  1676→    checklistItems.forEach(li => {
+  1677→      const key = li.getAttribute('data-check');
+  1678→      li.classList.toggle('on', !!r.checks[key]);
+  1679→    });
+  1680→
+  1681→    passTips.innerHTML = '';
+  1682→    r.tips.forEach(t => {
+  1683→      const li = document.createElement('li');
+  1684→      li.textContent = t;
+  1685→      passTips.appendChild(li);
+  1686→    });
+  1687→  }
+  1688→
+  1689→  passInput.addEventListener('input', renderPassword);
+  1690→
+  1691→  togglePassBtn.addEventListener('click', () => {
+  1692→    const showing = passInput.type === 'text';
+  1693→    passInput.type = showing ? 'password' : 'text';
+  1694→    togglePassBtn.setAttribute('aria-pressed', String(!showing));
+  1695→    togglePassBtn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+  1696→    eyeOpen.hidden = !showing;
+  1697→    eyeClosed.hidden = showing;
+  1698→    passInput.focus();
+  1699→  });
+  1700→
+  1701→  clearPassBtn.addEventListener('click', () => {
+  1702→    passInput.value = '';
+  1703→    passInput.type = 'password';
+  1704→    togglePassBtn.setAttribute('aria-pressed', 'false');
+  1705→    togglePassBtn.setAttribute('aria-label', 'Show password');
+  1706→    eyeOpen.hidden = false;
+  1707→    eyeClosed.hidden = true;
+  1708→    renderPassword();
+  1709→    passInput.focus();
+  1710→  });
+  1711→
+  1712→  // Local passphrase generator — crypto.getRandomValues, never leaves the page
+  1713→  const PASSPHRASE_WORDS = ['violet', 'trombone', 'cafeteria', 'lantern', 'harbor', 'marble', 'falcon', 'willow', 'prism', 'copper', 'meadow', 'saffron', 'tundra', 'ember', 'cascade', 'quartz', 'juniper', 'monsoon', 'compass', 'clover', 'onyx', 'breeze', 'cedar', 'galaxy', 'nectar', 'anchor', 'opal', 'prairie', 'ridge', 'summit', 'timber', 'umbra', 'velvet', 'walnut', 'xenon', 'yonder', 'zephyr', 'aurora', 'cobalt', 'dune', 'eclipse', 'fjord', 'granite', 'halcyon', 'indigo', 'jungle', 'kraken', 'lumen', 'mango', 'nebula', 'orchid', 'pebble', 'quill', 'raven', 'sage', 'tidal', 'ultraviolet', 'vortex', 'whisper', 'yucca', 'zircon', 'basil', 'cinder', 'dahlia', 'evergreen', 'flint', 'glacier', 'horizon', 'ivory', 'jasmine'];
+  1714→
+  1715→  function secureRandomIndex(max) {
+  1716→    const buf = new Uint32Array(1);
+  1717→    crypto.getRandomValues(buf);
+  1718→    return buf[0] % max;
+  1719→  }
+  1720→
+  1721→  genPassBtn.addEventListener('click', () => {
+  1722→    const words = [];
+  1723→    for (let i = 0; i < 4; i++) words.push(PASSPHRASE_WORDS[secureRandomIndex(PASSPHRASE_WORDS.length)]);
+  1724→    const sep = ['-', '.', '_'][secureRandomIndex(3)];
+  1725→    const num = 10 + secureRandomIndex(90);
+  1726→    passInput.value = `${words.join(sep)}${sep}${num}`;
+  1727→    renderPassword();
+  1728→  });
+  1729→
+  1730→  copyPassBtn.addEventListener('click', async () => {
+  1731→    const pw = passInput.value;
+  1732→    if (!pw) { copyPassLabel.textContent = 'Nothing to copy'; setTimeout(() => { copyPassLabel.textContent = 'Copy'; }, 1400); return; }
+  1733→    let ok = false;
+  1734→    try {
+  1735→      if (navigator.clipboard && navigator.clipboard.writeText) {
+  1736→        await navigator.clipboard.writeText(pw);
+  1737→        ok = true;
+  1738→      }
+  1739→    } catch (err) { /* clipboard denied — fall through */ }
+  1740→    if (!ok) {
+  1741→      try {
+  1742→        const ta = document.createElement('textarea');
+  1743→        ta.value = pw;
+  1744→        ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+  1745→        ta.setAttribute('readonly', '');
+  1746→        document.body.appendChild(ta);
+  1747→        ta.select();
+  1748→        ok = document.execCommand('copy');
+  1749→        document.body.removeChild(ta);
+  1750→      } catch (err) { ok = false; }
+  1751→    }
+  1752→    copyPassLabel.textContent = ok ? 'Copied ✓' : 'Copy blocked';
+  1753→    setTimeout(() => { copyPassLabel.textContent = 'Copy'; }, 1600);
+  1754→  });
+  1755→
+  1756→  renderPassword();
+  1757→
+  1758→  /* ============================================================
+  1759→     NAV — mobile toggle (Bootstrap CDN still loaded; this guarantees
+  1760→     the menu even if the module fails)
+  1761→     ============================================================ */
+  1762→  const navToggle = document.querySelector('.nav-toggle-btn');
+  1763→  const navCollapse = document.getElementById('siteNav');
+  1764→  if (navToggle && navCollapse) {
+  1765→    navToggle.addEventListener('click', () => {
+  1766→      const open = navCollapse.classList.toggle('show');
+  1767→      navToggle.setAttribute('aria-expanded', String(open));
+  1768→    });
+  1769→    navCollapse.querySelectorAll('a[href^="#"]').forEach(a => {
+  1770→      a.addEventListener('click', () => {
+  1771→        navCollapse.classList.remove('show');
+  1772→        navToggle.setAttribute('aria-expanded', 'false');
+  1773→      });
+  1774→    });
+  1775→  }
+  1776→
+  1777→  /* ============================================================
+  1778→     PARALLAX — layered depth on scroll
+  1779→     · [data-parallax] elements translate at their own rate
+  1780→     · body grid drifts slower than content (layer 0)
+  1781→     Smooth via rAF + lerp; disabled for reduced-motion users.
+  1782→     ============================================================ */
+  1783→  (function initParallax() {
+  1784→    if (prefersReducedMotion) return;
+  1785→
+  1786→    const layers = Array.from(document.querySelectorAll('[data-parallax]')).map(el => ({
+  1787→      el,
+  1788→      speed: parseFloat(el.getAttribute('data-parallax')) || 0.1,
+  1789→      baseTop: 0
+  1790→    }));
+  1791→    const measure = () => {
+  1792→      layers.forEach(l => {
+  1793→        const r = l.el.getBoundingClientRect();
+  1794→        l.baseTop = r.top + window.scrollY - (parseFloat(l.el.dataset.pShift || 0));
+  1795→      });
+  1796→    };
+  1797→    measure();
+  1798→    window.addEventListener('resize', measure);
+  1799→
+  1800→    let target = window.scrollY, current = window.scrollY, ticking = false;
+  1801→    const body = document.body;
+  1802→
+  1803→    const render = () => {
+  1804→      current += (target - current) * 0.085; // lerp — buttery but cheap
+  1805→      if (Math.abs(target - current) < 0.4) current = target;
+  1806→
+  1807→      for (const l of layers) {
+  1808→        const offset = (l.baseTop - current - window.innerHeight / 2 + l.el.offsetHeight / 2) * l.speed;
+  1809→        l.el.style.transform = `translate3d(0, ${offset.toFixed(2)}px, 0)`;
+  1810→      }
+  1811→      // background grid drifts at 0.12 of scroll speed
+  1812→      body.style.backgroundPosition = `0px 0px, 0px 0px, 0px 0px, 0px ${(-current * 0.12).toFixed(1)}px, 0px ${(-current * 0.12).toFixed(1)}px, 0px ${(-current * 0.06).toFixed(1)}px, 0px ${(-current * 0.06).toFixed(1)}px`;
+  1813→
+  1814→      if (current !== target) {
+  1815→        requestAnimationFrame(render);
+  1816→      } else {
+  1817→        ticking = false;
+  1818→      }
+  1819→    };
+  1820→    const onScroll = () => {
+  1821→      target = window.scrollY;
+  1822→      if (!ticking) { ticking = true; requestAnimationFrame(render); }
+  1823→    };
+  1824→    window.addEventListener('scroll', onScroll, { passive: true });
+  1825→    render();
+  1826→  })();
+  1827→  </script>
+  1828→</body>
+  1829→</html>
+  1830→

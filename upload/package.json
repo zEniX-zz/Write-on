@@ -1,0 +1,17 @@
+{
+  "name": "vite-react-ts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "echo \"standalone build \u2014 no lint step\"",
+    "preview": "vite preview"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "vite": "^7.3.1",
+    "@types/node": "^24.10.1"
+  }
+}
